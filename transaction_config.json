@@ -5,5 +5,9 @@
                         "era", "expose", "shift", "afraid", "cradle", "junior", "any",
                         "object", "fat", "addict"
                         ],
-        "Access Key": "m/1",
-        "UTXOs": 
+        "Access Key Sources": ["m/0"],
+        "Target Info": [{"Address": "bcrt1q5clqxgfv58s30h8qv2fw7v3cqqu3umax6lhdhs", "Amount": 125.0, "Redeem Script": ""}],
+        "Access Key Change": "m/2",
+        "Transaction Fees": 0.002,
+        "Locktime": 0
+}

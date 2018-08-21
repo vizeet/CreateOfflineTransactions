@@ -50,8 +50,11 @@ def base58checkEncode(prefix: bytes, h: bytes):
         print('encoded base58 = %s' % encode)
         return encode
 
-def base58checkDecode(h: bytes):
-        pass
+def base58checkDecode(s: str):
+        with_checksum_int = base58_decode(s)
+        with_checksum_b = binascii.unhexlify('%x' % with_checksum_int)
+        decode_b = with_checksum_b[1:-4]
+        return decode_b
 
 def base58checkVerify(prefix: str, val: str):
         decoded_val = base58_decode(val)

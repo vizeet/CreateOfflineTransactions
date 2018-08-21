@@ -6,16 +6,18 @@ import base58
 import hash_utils
 import bitcoin_bech32
 
-network_type = ['mainnet', 'testnet', 'regtest']_
+network_type = ['mainnet', 'testnet', 'regtest']
 segwit_address_prefix = {'mainnet': 'bc', 'testnet': 'tb', 'regtest': 'bcrt'}
+address_prefix = {'mainnet': ['1'], 'testnet': []}
 
+# uncompressed public key has b'\x04' prefix
 def compressPubkey(pubkey: bytes):
         x_b = pubkey[1:33]
         y_b = pubkey[33:65]
         if (y_b[31] & 0x01) == 0: # even
-                compressed_pubkey = b'\02' + x_b
+                compressed_pubkey = b'\x02' + x_b
         else:
-                compressed_pubkey = b'\03' + x_b
+                compressed_pubkey = b'\x03' + x_b
         return compressed_pubkey
 
 def privkey2pubkey(privkey: int, compress: bool):
@@ -48,12 +50,6 @@ def uncompressPubkey(x_b: bytes):
 ### pre-segwit [
 def pkh2address(pkh: bytes, is_testnet: bool):
         address = bitcoin_base58.forAddress(pkh, is_testnet, False)
-        return address
-
-def pubkey2address(pubkey: bytes, is_testnet: bool):
-        pkh = hash_utils.hash160(pubkey)
-        print('pkh = %s' % bytes.decode(binascii.hexlify(pkh)))
-        address = pkh2address(pkh, is_testnet)
         return address
 
 def sh2address(sh: bytes, is_testnet: bool):
@@ -96,6 +92,18 @@ def hash2address(h: bytes, nettype: str, is_segwit: bool, is_script: bool):
                         address = hash2segwitaddr(h, nettype)
                 else:
                         address = pkh2address(h, nettype == 'testnet')
+        return address
+
+def address2hash(address: str):
+        is_segwit = (address[0:3] == 'bc1' or address[0:3] == 'tb1' or address[0:5] == 'bcrt1')
+        if is_segwit:
+                hrp, h_list = bitcoin_bech32.bech32_decode(address)
+                witver, h_list = bitcoin_bech32.decode(hrp, address)
+                print('h_list = %s' % h_list)
+                h_b = bytes(h_list)
+        else:
+                h_b = base58.base58checkDecode(privkey_wif)
+        return h_b
 
 def addressCheckVerify(address: str):
         is_valid = False
@@ -117,15 +125,18 @@ def privkeyHex2Wif(privkey: int, is_testnet: bool, for_compressed_pubkey: bool):
         return wif
 
 def privkeyWif2Hex(privkey: str):
-        privkey, for_compressed_pubkey = bitcoin_base58.decodeWifPrivkey(privkey)
-        return privkey, for_compressed_pubkey
+        nettype, prefix, privkey, for_compressed_pubkey = bitcoin_base58.decodeWifPrivkey(privkey)
+        return privkey
 
 if __name__ == '__main__':
         pubkey = privkey2pubkey(0x18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725, False)
         print ('Full pubkey = %s' % bytes.decode(binascii.hexlify(pubkey)))
         pubkey = privkey2pubkey(0x18e14a7b6a307f426a94f8114701e7c8e774e7f9a47e2c2035db29a206321725, True)
         print ('compressed pubkey = %s' % bytes.decode(binascii.hexlify(pubkey)))
-        address = pubkey2address(pubkey, False)
+        privkey_i = 0xe01995f9fa6be4f08511cbebc0a26741c38192026acab874c8c640331cdb98a8
+        pubkey = privkey2pubkey(privkey_i, True)
+        print ('compressed pubkey = %s for privkey = %x' % (bytes.decode(binascii.hexlify(pubkey)), privkey_i))
+        address = pubkey2address(pubkey, "mainnet", False)
         print('address = %s' % address)
         pubkey = uncompressPubkey(pubkey)
         print ('uncompressed pubkey = %s' % bytes.decode(binascii.hexlify(pubkey)))
@@ -157,7 +168,10 @@ if __name__ == '__main__':
         hrp = 'bcrt'
         address = witnessProgram2address(hrp, witver, witprog)
         print('Regtest WPKH witness address = %s for witness program = %s' % (address, witprog_str))
-        privkey_wif = privkeyHex2Wif(0xef235aacf90d9f4aadd8c92e4b2562e1d9eb97f0df9ba3b508258739cb013db2, False, True)
-        print('private key in WIF format = %s' % privkey_wif)
-        address = pubkey2address(binascii.unhexlify('02340886131f76166c8b4fec75b59b23a49a45ea0ffc016eeecd404ae58e0196c0'), True)
+        privkey_hex = 'ef235aacf90d9f4aadd8c92e4b2562e1d9eb97f0df9ba3b508258739cb013db2'
+        privkey_wif = privkeyHex2Wif(int(privkey_hex, 16), False, True)
+        print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))
+        privkey_hex = privkeyWif2Hex(privkey_wif)
+        print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))
+        address = pubkey2address(binascii.unhexlify('02340886131f76166c8b4fec75b59b23a49a45ea0ffc016eeecd404ae58e0196c0'), "testnet", False)
         print('testnet address = %s' % address)

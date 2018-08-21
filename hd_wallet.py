@@ -106,9 +106,9 @@ if __name__ == '__main__':
 
         mnemonic_code = mnemonic_code.getMnemonicWordCodeString()
         print('mnemonic code: %s' % mnemonic_code)
-        seed = generateSeedFromStr(mnemonic_code, "mnemonic" + args.salt)
+        seed_b = generateSeedFromStr(mnemonic_code, "mnemonic" + args.salt)
 
-        master_privkey, master_chaincode = generateMasterKeys(seed)
+        master_privkey, master_chaincode = generateMasterKeys(seed_b)
 
         if master_privkey == 0 or master_privkey >= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F:
                 print('invalid master key')
@@ -125,5 +125,7 @@ if __name__ == '__main__':
         child_privkey, child_chaincode = generateChildAtIndex(master_privkey, master_chaincode, 0)
         print('child private key = %x, child chaincode = %s' % (child_privkey, bytes.decode(binascii.hexlify(child_chaincode))))
 
-        privkey, chaincode = generatePrivkeyPubkeyPair('m / 5\'/ 6', seed, True)
+        print('seed = %s' % bytes.decode(binascii.hexlify(seed_b)))
+
+        privkey, chaincode = generatePrivkeyPubkeyPair('m / 5\'/ 6', seed_b, True)
         print('keys at m / 5\'/6: private key = %x, public key = %s' % (privkey, bytes.decode(binascii.hexlify(chaincode))))

@@ -7,9 +7,14 @@ import time
 import pubkey_address
 
 # Open the LevelDB
-block_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/blocks/index"), compression=None)
-chainstate_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/chainstate"), compression=None)
-txindex_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/indexes/txindex"), compression=None)
+#block_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/blocks/index"), compression=None)
+#chainstate_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/chainstate"), compression=None)
+#txindex_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/indexes/txindex"), compression=None)
+
+block_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/regtest/blocks/index"), compression=None)
+chainstate_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/regtest/chainstate"), compression=None)
+txindex_db = plyvel.DB(os.path.join(os.getenv('HOME'),".bitcoin/regtest/indexes/txindex"), compression=None)
+
 
 BLOCK_HAVE_DATA          =    8
 BLOCK_HAVE_UNDO          =   16
@@ -349,7 +354,53 @@ def iterateChainstateDBForP2WPKH():
                                                 witver = 0x00
                                                 hrp = 'bc'
                                                 address = pubkey_address.witnessProgram2address(hrp, witver, hash160_b)
-                                                print('segwit: txn_id = %s, out_index = %s, height = %d, hash160 = %s, address = %s' % (txn_hash_little_endian, out_index, jsonobj['height'], bytes.decode(binascii.hexlify(hash160_b)), address), file = utxos_file)
+                                                value = jsonobj['amount']
+                                                print('txn_id = %s, out_index = %s, height = %d, hash160 = %s, address = %s, value = %d' % (txn_hash_little_endian, out_index, jsonobj['height'], bytes.decode(binascii.hexlify(hash160_b)), address, value), file = utxos_file)
+
+def getRequiredTxnsForAmountInP2WPKH(addresses: list, amount: float):
+        remaining_amount = amount
+        it = chainstate_db.iterator(include_value=False)
+        required_hash160_b_list = [pubkey_address.address2hash(address) for address in addresses]
+        ret_dict = []
+        with open('utxos_segwit_address.txt', 'wt') as utxos_file:
+                while remaining_amount > 0:
+                        try:
+                                key = next(it)
+                        except StopIteration:
+                                break
+                        prefix = key[0:1]
+                        if prefix == b'C':
+                                out_index, pos = b128_varint_decode(key[33:])
+                                txn_hash_big_endian_b = key[1:33]
+                                txn_hash_little_endian = bytes.decode(binascii.hexlify(key[1:33][::-1]))
+                                jsonobj = getChainstateData(txn_hash_big_endian_b, out_index)
+                                if jsonobj['script_type'] == 28 :
+                                        size_hash = int(binascii.hexlify(jsonobj['script'][1:2]), 16)
+                                        if len(jsonobj['script']) == size_hash + 2:
+                                                hash160_b = jsonobj['script'][2:2 + size_hash]
+                                                recent_block_hash = getRecentBlockHash()
+                                                recent_block_height = getBlockIndex(recent_block_hash)['height']
+                                                block_height = jsonobj['height']
+                                                block_depth = recent_block_height - block_height
+                                                print('block depth = %d' % block_depth)
+                                                # coinbase transaction can be redeemed only after 100th confirmation
+                                                if (hash160_b in required_hash160_b_list) or (jsonobj['is_coinbase'] == (code & 0x01) and block_depth >= 100):
+                                                        witver = 0x00
+                                                        #hrp = 'bc'
+                                                        hrp = 'bcrt'
+                                                        address = pubkey_address.witnessProgram2address(hrp, witver, hash160_b)
+                                                        value = jsonobj['amount']
+                                                        print('txn_id = %s, out_index = %s, height = %d, hash160 = %s, address = %s, value = %d' % (txn_hash_little_endian, out_index, jsonobj['height'], bytes.decode(binascii.hexlify(hash160_b)), address, value), file = utxos_file)
+                                                        txn_info = {}
+                                                        txn_info['txn_id'] = txn_hash_little_endian
+                                                        txn_info['out_index'] = out_index
+                                                        txn_info['height'] = block_height
+                                                        txn_info['hash160'] = bytes.decode(binascii.hexlify(hash160_b))
+                                                        txn_info['address'] = address
+                                                        txn_info['value'] = value
+                                                        ret_dict.append(txn_info)
+                                                        remaining_amount = remaining_amount - (value / 100000000)
+        return ret_dict
 
 def getLastBlockFile():
         last_blockfile_number = int(binascii.hexlify(block_db.get(b'l')[::-1]), 16)
@@ -400,29 +451,29 @@ def getRecentBlockHash():
         return block_hash_b
 
 if __name__ == '__main__':
-        txn_hash_str = 'd6030272a4e430b293c7f6152398ea47d8485e2e8c1719f841c9665ffee6a237'
-        t = binascii.unhexlify(txn_hash_str)[::-1]
-        blockfile_number, block_offset, txn_offset = getTxnOffset(t)
-        print('txn_hash_str = %s, block_file_number = %d, block_offset = %d, tx_offset = %d' % (txn_hash_str, blockfile_number, block_offset, txn_offset))
-
-        block_hash_str = '0000000000000000002520cefdd338334a3160bc5562b8cfd06a3ebba6919c24'
-        block_hash_bigendian = binascii.unhexlify(block_hash_str)[::-1]
-        blockindex_json = getBlockIndex(block_hash_bigendian)
-        print('block_hash_str = %s, block index json = %s' % (block_hash_str, blockindex_json))
-
-        last_block_index = getLastBlockFile()
-        print('last block index = %d' % last_block_index)
-
-        if isTxindex() == True:
-                print('txindex is enabled')
-        else:
-                print('txindex is disabled')
-        block_hash_b = getRecentBlockHash()
-        print('Latest stored block hash = %s' % bytes.decode(binascii.hexlify(block_hash_b[::-1])))
-        print('....txn_id = %s' % bytes.decode(binascii.hexlify(binascii.unhexlify('0060c16adcf98e70c1d9e8c971ad9f27d3363394993156691ec9f3a46c4c4a4d')[::-1])))
-        jsonobj = getChainstateData(binascii.unhexlify('0060c16adcf98e70c1d9e8c971ad9f27d3363394993156691ec9f3a46c4c4a4d'), 1822)
-        print(jsonobj)
-        check_varint(2000000)
+#        txn_hash_str = 'd6030272a4e430b293c7f6152398ea47d8485e2e8c1719f841c9665ffee6a237'
+#        t = binascii.unhexlify(txn_hash_str)[::-1]
+#        blockfile_number, block_offset, txn_offset = getTxnOffset(t)
+#        print('txn_hash_str = %s, block_file_number = %d, block_offset = %d, tx_offset = %d' % (txn_hash_str, blockfile_number, block_offset, txn_offset))
+#
+#        block_hash_str = '0000000000000000002520cefdd338334a3160bc5562b8cfd06a3ebba6919c24'
+#        block_hash_bigendian = binascii.unhexlify(block_hash_str)[::-1]
+#        blockindex_json = getBlockIndex(block_hash_bigendian)
+#        print('block_hash_str = %s, block index json = %s' % (block_hash_str, blockindex_json))
+#
+#        last_block_index = getLastBlockFile()
+#        print('last block index = %d' % last_block_index)
+#
+#        if isTxindex() == True:
+#                print('txindex is enabled')
+#        else:
+#                print('txindex is disabled')
+#        block_hash_b = getRecentBlockHash()
+#        print('Latest stored block hash = %s' % bytes.decode(binascii.hexlify(block_hash_b[::-1])))
+#        print('....txn_id = %s' % bytes.decode(binascii.hexlify(binascii.unhexlify('0060c16adcf98e70c1d9e8c971ad9f27d3363394993156691ec9f3a46c4c4a4d')[::-1])))
+#        jsonobj = getChainstateData(binascii.unhexlify('0060c16adcf98e70c1d9e8c971ad9f27d3363394993156691ec9f3a46c4c4a4d'), 1822)
+#        print(jsonobj)
+        #check_varint(2000000)
         t1 = datetime.now()
         iterateChainstateDBForP2WPKH()
         t2 = datetime.now()

@@ -24,20 +24,27 @@ address_prefixes = {
         "Mainnet": {
                 "PKH": "1",
                 "SH": "3",
-                "WIF_Uncompressed": 0x80,
-                "WIF_Compressed": 0x80,
+                "WIF_Uncompressed": "5",
+                "WIF_Compressed": ["K", "L"],
                 "BIP32_Pubkey": 0x0488B21E,
                 "BIP32_Privkey": 0x0488ADE4
         },
         "Testnet": {
-                "PKH": "m",
+                "PKH": ["m", "n"],
                 "SH": "2",
-                "WIF_Uncompressed": 0xEF,
-                "WIF_Compressed": 0xEF,
+                "WIF_Uncompressed": "9",
+                "WIF_Compressed": "c",
                 "BIP32_Pubkey": 0x043587CF,
                 "BIP32_Privkey": 0x04358394
         }
 }
+
+nettypes = ["Mainnet", "Testnet"]
+
+address_prefixes_for_wif = ['9', '5', 'K', 'L', 'c']
+address_prefixes_for_wif_uncompressed = ['9', '5']
+address_prefixes_for_wif_compressed = ['K', 'L', 'c']
+address_prefixes_nettype_for_wif = {'Mainnet': ['5', 'K', 'L'], 'Testnet': ['9', 'c']}
 
 def forAddress(h: bytes, is_testnet: bool, is_script: bool):
         prefix = base58_prefixes[("Mainnet", "Testnet")[is_testnet == True]][("PKH", "SH")[is_script == True]]
@@ -50,6 +57,11 @@ def addressVerify(address: str):
         is_valid = base58.base58checkVerify(prefix, address)
         return is_valid
 
+def wifVerify(wif: str):
+        wif_prefix = wif[0:2]
+        is_valid = base58.base58checkVerify(wif_prefix, wif)
+        return is_valid
+
 def encodeWifPrivkey(h: int, is_testnet: bool, for_compressed_pubkey: bool):
         prefix = base58_prefixes[("Mainnet", "Testnet")[is_testnet == True]][("WIF_Uncompressed", "WIF_Compressed")[for_compressed_pubkey == True]]
         print('wif prefix before encoding = %02x' % prefix)
@@ -60,4 +72,20 @@ def encodeWifPrivkey(h: int, is_testnet: bool, for_compressed_pubkey: bool):
         return wif_encoded
 
 def decodeWifPrivkey(privkey_wif: str):
-        pass
+        prefix = privkey_wif[0:1]
+        wif_decoded_b = base58.base58checkDecode(privkey_wif)
+        nettype = [k for k, v in address_prefixes_nettype_for_wif.items() if prefix in v][0]
+
+        if prefix not in address_prefixes_for_wif:
+                print('invalid prefix = %s' % prefix)
+                exit()
+
+        for_compressed_pubkey = (prefix in address_prefixes_for_wif_compressed)
+
+        if for_compressed_pubkey == True:
+                wif_decoded = bytes.decode(binascii.hexlify(wif_decoded_b[:-1]))
+        else:
+                wif_decoded = bytes.decode(binascii.hexlify(wif_decoded_b))
+        
+        print('nettype = %s, prefix = %s, wif_decoded = %s, for_compressed_pubkey = %r' % (nettype, prefix, wif_decoded, for_compressed_pubkey))
+        return nettype, prefix, wif_decoded, for_compressed_pubkey
