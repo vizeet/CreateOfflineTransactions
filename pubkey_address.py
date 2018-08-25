@@ -102,7 +102,8 @@ def address2hash(address: str):
                 print('h_list = %s' % h_list)
                 h_b = bytes(h_list)
         else:
-                h_b = base58.base58checkDecode(privkey_wif)
+                #h_b = base58.base58checkDecode(privkey_wif)
+                h_b = base58.base58checkDecode(address)
         return h_b
 
 def addressCheckVerify(address: str):

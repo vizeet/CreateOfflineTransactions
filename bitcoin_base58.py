@@ -89,3 +89,51 @@ def decodeWifPrivkey(privkey_wif: str):
         
         print('nettype = %s, prefix = %s, wif_decoded = %s, for_compressed_pubkey = %r' % (nettype, prefix, wif_decoded, for_compressed_pubkey))
         return nettype, prefix, wif_decoded, for_compressed_pubkey
+
+def base58checkDecode(s: str):
+        with_checksum_int = base58.base58_decode(s)
+        with_checksum_b = binascii.unhexlify('%x' % with_checksum_int)
+        decode_b = with_checksum_b[1:-4]
+        return decode_b
+
+def decodeWifPrivkey(privkey_wif: str):
+        is_testnet = False
+        for_compressed_pubkey = False
+        wif_prefix = privkey_wif[0:1]
+        testnet_prefixes = []
+        wif_compressed_prefixes = []
+
+        for k, v in address_prefixes.items():
+                if k == 'Mainnet':
+                        if type(v['WIF_Compressed']) == list:
+                                wif_compressed_prefixes.extend(v['WIF_Compressed'])
+                        else:
+                                wif_compressed_prefixes.append(v['WIF_Compressed'])
+                elif k == 'Testnet':
+                        if type(v['WIF_Compressed']) == list:
+                                wif_compressed_prefixes.extend(v['WIF_Compressed'])
+                                testnet_prefixes.extend(v['WIF_Compressed'])
+                        else:
+                                wif_compressed_prefixes.append(v['WIF_Compressed'])
+                                testnet_prefixes.append(v['WIF_Compressed'])
+
+                        if type(v['WIF_Uncompressed']) == list:
+                                testnet_prefixes.extend(v['WIF_Uncompressed'])
+                        else:
+                                testnet_prefixes.append(v['WIF_Uncompressed'])
+
+        if wif_prefix in testnet_prefixes:
+                is_testnet = True
+
+        if wif_prefix in wif_compressed_prefixes:
+                for_compressed_pubkey = True
+
+        #wif_decoded_i = base58.base58_decode(privkey_wif)
+        wif_decoded = base58checkDecode(privkey_wif)
+        return wif_decoded, is_testnet, for_compressed_pubkey
+
+if __name__ == '__main__':
+        #hash160_b = address2hash160('19WeyGVVqPuYJR2dpVUR6d8dn1SafrNKyS')
+        #print('hash 160 = %s' % bytes.decode(binascii.hexlify(hash160_b)))
+        wif_decoded, is_testnet, for_compressed_pubkey = decodeWifPrivkey('5JWp4FM7sfAAE88DW3yvGF5mQyrsEXeWzXZn79bg61Vg8YMfJjA')
+        print('wif_decoded = %s, is_testnet = %r, for_compressed_pubkey = %r' % (bytes.decode(binascii.hexlify(wif_decoded)), is_testnet, for_compressed_pubkey))

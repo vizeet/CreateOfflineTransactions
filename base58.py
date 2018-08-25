@@ -53,7 +53,7 @@ def base58checkEncode(prefix: bytes, h: bytes):
 def base58checkDecode(s: str):
         with_checksum_int = base58_decode(s)
         with_checksum_b = binascii.unhexlify('%x' % with_checksum_int)
-        decode_b = with_checksum_b[1:-4]
+        decode_b = with_checksum_b[0:-4]
         return decode_b
 
 def base58checkVerify(prefix: str, val: str):
@@ -77,8 +77,44 @@ def base58checkVerify(prefix: str, val: str):
                 return True
         return False
 
+def decodeWifPrivkey(privkey_wif: str):
+        is_testnet = False
+        for_compressed_pubkey = False
+        wif_prefix = privkey_wif[0:1]
+        testnet_prefixes = []
+        wif_compressed_prefixes = []
+
+        for k, v in address_prefixes.items():
+                if k == 'Mainnet':
+                        if type(v['WIF_Compressed']) == list:
+                                wif_compressed_prefixes.extend(v['WIF_Compressed'])
+                        else:
+                                wif_compressed_prefixes.append(v['WIF_Compressed'])
+                elif k == 'Testnet':
+                        if type(v['WIF_Compressed']) == list:
+                                wif_compressed_prefixes.extend(v['WIF_Compressed'])
+                                testnet_prefixes.extend(v['WIF_Compressed'])
+                        else:
+                                wif_compressed_prefixes.append(v['WIF_Compressed'])
+                                testnet_prefixes.append(v['WIF_Compressed'])
+
+                        if type(v['WIF_Uncompressed']) == list:
+                                testnet_prefixes.extend(v['WIF_Uncompressed'])
+                        else:
+                                testnet_prefixes.append(v['WIF_Uncompressed'])
+
+        if wif_prefix in testnet_prefixes:
+                is_testnet = True
+
+        if wif_prefix in wif_compressed_prefixes:
+                for_compressed_pubkey = True
+
+        wif_decoded = base58.base58_decode(privkey_wif)
+        return wif_decoded, is_testnet, for_compressed_pubkey
+
 if __name__ == '__main__':
 #        b58_str = 'xprv9s21ZrQH143K2fpGDeSiVghhRbX6YY7yUZ78Ng644PevUa8YKHAYJAg9CCbzkXdZvKZ8Xevajm9rcfYU974Ed86rFzvE58Yq8DdYuAZso5d'
         b58_str = 'xprv9u5MtGh9yEv5L2KZDwmUSpd9SPgCYFg5ehkboGez6Wsw5Tw3Z6K5ocPH6gqNECkjUtZmiqbXcYJNYzf3HnzVLMxwzk8ewAQPmPjgjMRJUUj'
 #        b58_str = 'xprv9u5MtGhJJuT3VWTbNxniyUb5JieoKHJFfcJhgQ2xt7AXsDBjyi3GqeWUZst5qYsR8B15HVYzgDJ97m43eVHgFXVNqdEJqtUPhqGDGYuwC98'
         print('base 58 decode = %x' % base58_decode(b58_str))
+

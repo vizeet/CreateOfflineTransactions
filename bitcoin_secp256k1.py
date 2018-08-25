@@ -1,4 +1,4 @@
-from elliptic_curve_math import EllipticCurveMath
+#from elliptic_curve_math import EllipticCurveMath
 import binascii
 
 # Bitcoin Secp256k1 constants [
