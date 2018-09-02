@@ -176,3 +176,9 @@ if __name__ == '__main__':
         print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))
         address = pubkey2address(binascii.unhexlify('02340886131f76166c8b4fec75b59b23a49a45ea0ffc016eeecd404ae58e0196c0'), "testnet", False)
         print('testnet address = %s' % address)
+        privkey_hex = 'bbc27228ddcb9209d7fd6f36b02f7dfa6252af40bb2f1cbc7a557da8027ff866'
+        privkey_wif = privkeyHex2Wif(int(privkey_hex, 16), True, True)
+        print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))
+        privkey_hex = '619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9'
+        privkey_wif = privkeyHex2Wif(int(privkey_hex, 16), True, True)
+        print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))

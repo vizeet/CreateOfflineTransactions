@@ -42,7 +42,7 @@ def getRawMicOutput():
         print('outdata = %s' % out)
         return out
 
-def get256BitRandomNumber():
+def getRandomNumberBits(bit_count: int):
         h = hashlib.sha256()
 
         # update with raw camera output
@@ -55,12 +55,14 @@ def get256BitRandomNumber():
         h.update(raw_sound)
 
         # update with system random number
-        sys_rand = '%x' % random.SystemRandom().randint(0, 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+        sys_rand = '%x' % random.SystemRandom().randrange(0, 1 << 32)
         sys_rand_b = binascii.unhexlify(sys_rand)
         h.update(sys_rand_b)
 
         h_b = h.digest()
-        return h_b
+        byte_count = bit_count // 8
+        rand_num_b = h_b[0:byte_count]
+        return rand_num_b
 
 if __name__ == '__main__':
-        print('random number = %s' % bytes.decode(binascii.hexlify(get256BitRandomNumber())))
+        print('random number = %s' % bytes.decode(binascii.hexlify(getRandomNumberBits(256))))

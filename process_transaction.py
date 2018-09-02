@@ -12,13 +12,15 @@ my_salt = ''
 
 jsonobj = json.load(open('transaction_config.json', 'rt'))
 
+N = (1 << 256) - 0x14551231950B75FC4402DA1732FC9BEBF
+
 def get_segwit_address(access_key: str, mnemonic_code: str):
         #mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
         print('mnemonic code = %s' % mnemonic_code)
         #access_key = jsonobj['Access Key']
         seed_b = hd_wallet.generateSeedFromStr(mnemonic_code, "mnemonic" + my_salt)
         privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
-        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, False, True)
+        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
         pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
         address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'regtest')
         #address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'mainnet')
@@ -27,9 +29,14 @@ def get_segwit_address(access_key: str, mnemonic_code: str):
         #print('hash160 of address = %s' % bytes.decode(binascii.hexlify(h_b)))
         return privkey_wif, pubkey_s, h_s, address_s
 
+def swap_endian_bytes(in_b: bytes):
+        out_b = in_b[::-1]
+        return out_b
+
 # Funding Address is used, returns list of transactions required
 def get_utxos_for_address(addresses: list, amount: float):
         utxos = leveldb_parser.getRequiredTxnsForAmountInP2WPKH(addresses, amount)
+        print('utxos = %s' % utxos)
         return utxos
 
 def get_funding_address_keys():
@@ -39,6 +46,7 @@ def get_funding_address_keys():
         for access_key in access_key_list:
                 keymap = {}
                 keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_segwit_address(access_key, mnemonic_code)
+                print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
                 keymap_list.append(keymap)
         return keymap_list
 
@@ -47,6 +55,7 @@ def get_change_address_hash():
         mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
         privkey, pubkey, witness_program, address = get_segwit_address(access_key, mnemonic_code)
         witness_program_b = binascii.unhexlify(witness_program)
+        print('change witness_program = %s, change_address = %s' % (witness_program, address))
         return witness_program_b, address
 
 def get_network_fees_satoshis():
@@ -54,7 +63,8 @@ def get_network_fees_satoshis():
 
 def get_required_amount():
         input_amount = reduce(lambda x, y: x + y, [tval['Amount'] for tval in jsonobj['Target Info']])
-        return input_amount
+        required_amount = input_amount + jsonobj['Transaction Fees']
+        return required_amount
 
 address_type_prefix_map = {
         'segwit': ['bc1', 'tb1', 'bcrt1'],
@@ -98,11 +108,12 @@ def get_locktime():
 
 def btc2bytes(btc: float):
         satoshis = int(btc * (10**8))
+        print('satoshis = %s' % satoshis)
         hex_b = binascii.unhexlify('%016x' % satoshis)[::-1]
         return hex_b
 
 def locktime2bytes(locktime: int):
-        hex_b = binascii.unhexlify('%016x' % locktime)[::-1]
+        hex_b = binascii.unhexlify('%08x' % locktime)[::-1]
         return hex_b
 
 def prepare_txn_inputs(utxo_list: list):
@@ -116,8 +127,7 @@ def prepare_txn_inputs(utxo_list: list):
                 else:
                         sequence = b'\xff\xff\xff\xff'
                 scriptsig_size = b'\x00' # for bare witness
-                in_txn += binascii.unhexlify(utxo['txn_id']) + bytes([utxo['out_index']]) + scriptsig_size + sequence
-        in_txn += locktime2bytes(locktime)
+                in_txn += swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1] + scriptsig_size + sequence
         return in_txn
 
 def get_input_satoshis(utxo_list: list):
@@ -141,13 +151,14 @@ def prepare_txn_outs(utxo_list: list, req_amount: float):
                 out_txn += amount_b + script_size_b + script_b
         change_b = btc2bytes(change_btc)
         change_witness_program_b, change_address = get_change_address_hash()
+        size_change_witness_program_b = bytes([len(change_witness_program_b)])
         change_witness_version_b = b'\x00'
-        size_change_script_b = bytes([len(change_witness_program_b) + len(change_witness_version_b)])
-        out_txn += change_b + size_change_script_b + change_witness_version_b + change_witness_program_b
+        size_change_script_b = bytes([len(change_witness_program_b) + len(change_witness_version_b) + 1])
+        out_txn += change_b + size_change_script_b + change_witness_version_b + size_change_witness_program_b + change_witness_program_b
         return out_txn
 
 def prepare_raw_txn():
-        version = b'\x01\x00\x00\x00'
+        version = b'\x02\x00\x00\x00'
         req_amount = get_required_amount()
         print('required amount = %.8f' % req_amount)
         keymap_list = get_funding_address_keys()
@@ -165,10 +176,12 @@ def prepare_raw_txn():
 def get_hash_prevouts(utxo_list: list):
         prevouts = b''
         for utxo in utxo_list:
-                prevouts += binascii.unhexlify(utxo['txn_id']) + bytes([utxo['out_index']])
+                prevouts += swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1]
+        print('prevouts = %s' % bytes.decode(binascii.hexlify(prevouts)))
         return hash_utils.hash256(prevouts) 
 
 def get_hash_sequence(utxo_list: list):
+        sequence = None
         concatenated_sequences = b''
         locktime = get_locktime()
         for utxo in utxo_list:
@@ -177,10 +190,15 @@ def get_hash_sequence(utxo_list: list):
                 else:
                         sequence = b'\xff\xff\xff\xff'
                 concatenated_sequences += sequence
+        print('concatenated sequence = %s' % bytes.decode(binascii.hexlify(concatenated_sequences)))
         return hash_utils.hash256(concatenated_sequences) 
 
-def get_hash_outs():
+def get_hash_outs(utxo_list):
         out_txn = b''
+        req_amount = get_required_amount()
+        input_btc = get_input_satoshis(utxo_list) / (10 ** 8)
+        print('input_btc = %.8f' % input_btc)
+        change_btc = input_btc - req_amount
         for target in jsonobj['Target Info']:
                 amount_b = btc2bytes(target['Amount'])
                 address = target['Address']
@@ -189,9 +207,13 @@ def get_hash_outs():
                 out_txn += amount_b + script_size_b + script_b
         change_b = btc2bytes(change_btc)
         change_witness_program_b, change_address = get_change_address_hash()
+#        change_witness_version_b = b'\x00'
+#        size_change_script_b = bytes([len(change_witness_program_b) + len(change_witness_version_b) + 1])
+#        out_txn += change_b + size_change_script_b + change_witness_version_b + bytes([len(change_witness_program_b)]) + change_witness_program_b
+        size_change_witness_program_b = bytes([len(change_witness_program_b)])
         change_witness_version_b = b'\x00'
-        size_change_script_b = bytes([len(change_witness_program_b) + len(change_witness_version_b)])
-        out_txn += change_b + size_change_script_b + change_witness_version_b + change_witness_program_b
+        size_change_script_b = bytes([len(change_witness_program_b) + len(change_witness_version_b) + 1])
+        out_txn += change_b + size_change_script_b + change_witness_version_b + size_change_witness_program_b + change_witness_program_b
         return hash_utils.hash256(out_txn)
 
 #    nVersion:     01000000
@@ -204,43 +226,77 @@ def get_hash_outs():
 #    hashOutputs:  863ef3e1a92afbfdb97f31ad0fc7683ee943e9abcf2501590ff8f6551f47e5e5
 #    nLockTime:    11000000
 #    nHashType:    01000000
-def get_hash_preimage_list():
+def get_preimage_list(utxo_list: list):
         locktime = get_locktime()
         locktime_b = locktime2bytes(locktime)
         keymap_list = get_funding_address_keys()
         address_list = [keymap['address'] for keymap in keymap_list]
         req_amount = get_required_amount()
-        utxo_list = get_utxos_for_address(address_list, req_amount)
-        version = binascii.unhexlify('%08x' % 0x01)[::-1]
+        version = binascii.unhexlify('%08x' % 0x02)[::-1]
         hash_prevouts = get_hash_prevouts(utxo_list)
         hash_sequence = get_hash_sequence(utxo_list)
-        hash_outs = get_hash_outs()
+        hash_outs = get_hash_outs(utxo_list)
         sighash_all = binascii.unhexlify('%08x' % 0x01)[::-1]
-        hash_preimage_list = []
+        preimage_list = []
+        sequence = None
         for utxo in utxo_list:
-                outpoint = binascii.unhexlify(utxo['txn_id']) + bytes([utxo['out_index']])
+                outpoint = swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1]
                 amount_satoshi = utxo['value']
                 amount_b = btc2bytes(amount_satoshi / (10 ** 8))
-                witness_program = binascii.unhexlify(utxos['hash160'])
+                witness_program = binascii.unhexlify(utxo['hash160'])
                 if sequence == None and locktime > 0:
                         sequence = b'\xee\xff\xff\xff'
                 else:
                         sequence = b'\xff\xff\xff\xff'
                 script = bytes([0x76, 0xa9, len(witness_program)]) + witness_program + bytes([0x88, 0xac])
                 script_size_b = bytes([len(script)])
-                hash_preimage = version + hash_prevouts + hash_sequence + outpoint + script_size_b + script + amount_b + sequence + hash_outs + locktime_b + sighash_all
-                hash_preimage_list.append(hash_preimage)
-        return hash_preimage_list
+                preimage = version + hash_prevouts + hash_sequence + outpoint + script_size_b + script + amount_b + sequence + hash_outs + locktime_b + sighash_all
+                print('version = %s, hash_prevouts = %s, hash_sequence = %s, outpoint = %s, script_size = %s, script = %s, amount = %s, sequence = %s, hash_outs = %s, locktime = %s, sighash_all = %s' % (bytes.decode(binascii.hexlify(version)), bytes.decode(binascii.hexlify(hash_prevouts)), bytes.decode(binascii.hexlify(hash_sequence)), bytes.decode(binascii.hexlify(outpoint)), bytes.decode(binascii.hexlify(script_size_b)), bytes.decode(binascii.hexlify(script)), bytes.decode(binascii.hexlify(amount_b)), bytes.decode(binascii.hexlify(sequence)), bytes.decode(binascii.hexlify(hash_outs)), bytes.decode(binascii.hexlify(locktime_b)), bytes.decode(binascii.hexlify(sighash_all))))
+                preimage_list.append(preimage)
+        return preimage_list
 
-def sign_txn_input():
-        for hash_preimage, keymap in zip(get_hash_preimage_list(), get_funding_address_keys()):
-                privkey_wif = keymap['privkey']
-                pubkey_address.privkeyWif2Hex(privkey_wif)
-                SigningKey.from_string(string_private_key, curve=SECP256k1)
-        pass
+def sign_txn_input(preimage: bytes, privkey_wif: str):
+        hash_preimage = hash_utils.hash256(preimage)
+        #privkey_wif = keymap['privkey']
+        privkey_s = pubkey_address.privkeyWif2Hex(privkey_wif)
+        print('privkey_s = %s' % privkey_s)
+        privkey_b = binascii.unhexlify(privkey_s)[:-1]
+        signingkey = ecdsa.SigningKey.from_string(privkey_b, curve=ecdsa.SECP256k1)
+        #sig_b = signingkey.sign_digest(hash_preimage, sigencode=ecdsa.util.sigencode_der) +b'\x01'
+        sig_b = signingkey.sign_digest(hash_preimage, sigencode=ecdsa.util.sigencode_der_canonize) +b'\x01'
+        print('sig = %s' % bytes.decode(binascii.hexlify(sig_b)))
+        return sig_b
 
 def prepare_signed_txn():
-        pass
+        req_amount = get_required_amount()
+        version = binascii.unhexlify('%08x' % 0x02)[::-1]
+        marker = b'\x00'
+        segwit_flag = b'\x01'
+        keymap_list = get_funding_address_keys()
+        address_list = [keymap['address'] for keymap in keymap_list]
+        utxo_list = get_utxos_for_address(address_list, req_amount)
+        txn_inputs = prepare_txn_inputs(utxo_list)
+        txn_outs = prepare_txn_outs(utxo_list, req_amount)
+        preimage_list = get_preimage_list(utxo_list)
+        address_privkey_map = dict(iter([(keymap['address'], keymap['privkey']) for keymap in keymap_list]))
+        address_pubkey_map = dict(iter([(keymap['address'], keymap['pubkey']) for keymap in keymap_list]))
+        witness_b = b''
+        for preimage, utxo in zip(preimage_list, utxo_list):
+                print('utxo = %s' % utxo)
+                witness_b += bytes([2])
+                sig_b = sign_txn_input(preimage, address_privkey_map[utxo['address']])
+                witness_b += bytes([len(sig_b)])
+                witness_b += sig_b
+                pubkey_b = binascii.unhexlify(address_pubkey_map[utxo['address']])
+                witness_b += bytes([len(pubkey_b)])
+                witness_b += pubkey_b
+                print('address = %s, signature = %s, preimage = %s' % (utxo['address'], bytes.decode(binascii.hexlify(sig_b)), bytes.decode(binascii.hexlify(preimage))))
+        locktime = get_locktime()
+        locktime_b = locktime2bytes(locktime)
+        print('locktime_b = %s' % bytes.decode(binascii.hexlify(locktime_b)))
+        print('preimage_list = %s' % [bytes.decode(binascii.hexlify(preimage)) for preimage in preimage_list])
+        signed_txn = version + marker + segwit_flag + txn_inputs + txn_outs + witness_b + locktime_b
+        return signed_txn
 
 def process_transaction():
         raw_txn = prepare_raw_txn()
@@ -254,3 +310,16 @@ if __name__ == '__main__':
         prepare_raw_txn()
         #get_default_locking_script('1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX')
         #get_default_locking_script('bc1qq3q342clxm2p04hfdknhe3cg6mrs8ur8jfln7h')
+        #sign_txn_input()
+        signed_txn = prepare_signed_txn()
+        print('signed_txn = %s' % bytes.decode(binascii.hexlify(signed_txn)))
+
+        #privkey = 'bbc27228ddcb9209d7fd6f36b02f7dfa6252af40bb2f1cbc7a557da8027ff866'
+        privkey = '619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9'.zfill(64)
+        txhash = 'c37af31116d1b27caf68aae9e3ac82f1477929014d5b917657d0eb49478cb670'.zfill(64)
+        signingkey = ecdsa.SigningKey.from_string(binascii.unhexlify(privkey), curve=ecdsa.SECP256k1)
+        sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der) + b'\x01'
+        #sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der_canonize) + b'\x01'
+        print('sig = %s' % bytes.decode(binascii.hexlify(sig_b)))
+
+        print('amount 6 => in bytes = %s' % bytes.decode(binascii.hexlify(btc2bytes(6))))

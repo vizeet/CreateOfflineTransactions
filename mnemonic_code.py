@@ -2,15 +2,45 @@ import hashlib
 import random_number_generator
 import binascii
 from functools import reduce
+import math
 
-def getMnemonicWordSelectorBits():
-        rnd_bits = random_number_generator.get256BitRandomNumber()
-#        rnd_str = '2041546864449caff939d32d574753fe684d3c947c3346713dd8423e74abcf8c'
-#        print('Random String = %s' % rnd_str.upper())
-        print('Random String = %s' % bytes.decode(binascii.hexlify(rnd_bits)).upper())
-#        rnd_bits = binascii.unhexlify('2041546864449caff939d32d574753fe684d3c947c3346713dd8423e74abcf8c')
-        mnemonic_selector_bits = rnd_bits + hashlib.sha256(rnd_bits).digest()[0:1]
-        return mnemonic_selector_bits
+def getChecksumBitCount(mnemonic_length: int):
+        if (mnemonic_length % 3) != 0:
+                raise ValueError('Invalid Mnemonic code length')
+        checksum_bit_count = mnemonic_length // 3
+        return checksum_bit_count
+
+def getEntropyBitCount(mnemonic_length: int):
+        if (mnemonic_length % 3) != 0:
+                raise ValueError('Invalid Mnemonic code length')
+        entropy_bit_count = (mnemonic_length * 32) // 3
+        return entropy_bit_count
+
+def getCheckEntropyBitCount(mnemonic_length: int):
+        checksum_bit_count = getChecksumBitCount(mnemonic_length)
+        entropy_bit_count = getEntropyBitCount(mnemonic_length)
+        entropy_checksum_bit_count = entropy_bit_count + checksum_bit_count
+        return entropy_checksum_bit_count
+
+def getEntropyCheckBits(mnemonic_length: int):
+        entropy_bit_count = getEntropyBitCount(mnemonic_length)
+        print('entropy_bit_count = %d' % entropy_bit_count)
+        random_number_b = random_number_generator.getRandomNumberBits(entropy_bit_count)
+        print('random_number = %s' % bytes.decode(binascii.hexlify(random_number_b)))
+        checksum_bit_count = getChecksumBitCount(mnemonic_length)
+        print('checksum bit count = %d' % checksum_bit_count)
+        checksum = int(binascii.hexlify(hashlib.sha256(random_number_b).digest()), 16)
+        print('checksum = %x' % checksum)
+        initial_checksum = checksum >> (256 - checksum_bit_count)
+        random_number = int(bytes.decode(binascii.hexlify(random_number_b)), 16)
+        shifted_random_number = random_number << checksum_bit_count
+        entropy_check_i = shifted_random_number | initial_checksum
+        entropy_check_size_bytes = math.ceil((entropy_bit_count + checksum_bit_count) / 8)
+        print('entropy_check_size_bytes = %d' % entropy_check_size_bytes)
+        entropy_check_s = ('%x' % entropy_check_i).zfill(entropy_check_size_bytes * 2)
+        print('entropy_check_s = %s' % entropy_check_s)
+        entropy_check_b = binascii.unhexlify(entropy_check_s)
+        return entropy_check_b
 
 def getMnemonicWordList():
         word_list = []
@@ -18,10 +48,8 @@ def getMnemonicWordList():
                 word_list = word_file.read().splitlines()
         return word_list
 
-def convertSelectorBits2List(selector_bits: bytes, size: int):
-        selector_int = int(binascii.hexlify(selector_bits), 16)
-        print('selector str = %s' % binascii.hexlify(selector_bits))
-        print('selector int = %x' % selector_int)
+def entropyCheckBits2List(entropy_check_b: bytes, size: int):
+        selector_int = int(binascii.hexlify(entropy_check_b), 16)
         selector_list = []
         while size >= 11:
                 selector_list.append(selector_int & 0x07FF)
@@ -30,37 +58,67 @@ def convertSelectorBits2List(selector_bits: bytes, size: int):
         print('len of selector list = %d' % len(selector_list))
         return selector_list[::-1]
 
+def getEntropyCheckBitCountFromSelectorCount(selector_count: int):
+        return selector_count * 11
+
+def getChecksumBitCountFromEntropyBitCount(entropy_bit_count: int):
+        return entropy_bit_count // 32
+
 def convertSelectorList2Bits(selector_list: list):
-        selector_list = selector_list
-        selector_int = reduce(lambda x, y: (x << 11) | y, selector_list)
-        print('III selector bits = %s' % hex(selector_int))
-        selector_bits = binascii.unhexlify(hex(selector_int)[2:])
-        return selector_bits
+        entropy_check_bit_count = getEntropyCheckBitCountFromSelectorCount(len(selector_list))
+        print('entropy checksum bit count = %d' % entropy_check_bit_count)
+        entropy_check_i = reduce(lambda x, y: (x << 11) | y, selector_list)
+        print('entropy_check_i = %x' % entropy_check_i)
+#        checksum_bit_count = getChecksumBitCountFromEntropyBitCount(entropy_check_bit_count)
+#        print('checksum_bit_count = %d' % checksum_bit_count)
+#        selector_int = selector_with_checksum_int >> checksum_bit_count
+#        selector_bits = binascii.unhexlify(hex(selector_int)[2:])
+#        selector_bits = binascii.unhexlify('%x' % selector_int)
+#        entropy_check_size_bytes = math.ceil(entropy_check_bit_count / 8)
+#        entropy_check_b = binascii.unhexlify('%x' % selector_with_checksum_i).zfill(entropy_check_size_bytes * 2)
+        return entropy_check_i
 
-def getMnemonicWordCodeString():
+def getMnemonicWordCodeString(mnemonic_length: int):
         word_list = getMnemonicWordList()
-
-        selector_bits = getMnemonicWordSelectorBits()
-        selector_list = convertSelectorBits2List(selector_bits, 264)
+        entropy_check_bit_count = getCheckEntropyBitCount(mnemonic_length)
+        print('entropy check bit count = %d' % entropy_check_bit_count)
+        entropy_check_b = getEntropyCheckBits(mnemonic_length)
+        print('entropy check = %s' % bytes.decode(binascii.hexlify(entropy_check_b)))
+        selector_list = entropyCheckBits2List(entropy_check_b, entropy_check_bit_count)
         mnemonic_word_list = getMnemonicWordList()
         word_key_list = [mnemonic_word_list[selector] for selector in selector_list]
 
         return ' '.join(word_key_list)
 
-def verifyChecksumInSelectorBits(selector_bits: bytes):
-        rnd_bits = selector_bits[0:32]
-        checksum = selector_bits[-1]
-        return (hashlib.sha256(rnd_bits).digest()[0] == checksum)
+def verifyChecksumInSelectorBits(entropy_check_i: int, mnemonic_length: int):
+        entropy_bit_count = getEntropyBitCount(mnemonic_length)
+        checksum_bit_count = getChecksumBitCount(mnemonic_length)
+        entropy_i = (entropy_check_i >> checksum_bit_count)
+        entropy_size_bytes = entropy_bit_count // 8
+        print('entropy_size_bytes = %d' % entropy_size_bytes)
+        entropy_s = ('%x' % entropy_i).zfill(entropy_size_bytes * 2)
+        print('entropy_s = %s' % entropy_s)
+        entropy_b = binascii.unhexlify(entropy_s)
+        set_bits = (1 << checksum_bit_count) - 1
+        initial_checksum = entropy_check_i & set_bits
+        print('initial_checksum = %x' % initial_checksum)
+        checksum_calculated = int(bytes.decode(binascii.hexlify(hashlib.sha256(entropy_b).digest())), 16)
+        print('checksum_calculated = %x' % checksum_calculated)
+        initial_checksum_calculated = (checksum_calculated >> (256 - checksum_bit_count))
+        print('initial_checksum_calculated = %x' % initial_checksum_calculated)
+        return (initial_checksum_calculated == initial_checksum)
 
 def verifyMnemonicWordCodeString(mnemonic_code: str):
-        word_key_list = mnemonic_code.split(' ')
+        word_key_list = mnemonic_code.split()
+        mnemonic_length = len(word_key_list)
         mnemonic_word_list = getMnemonicWordList()
         selector_list = [mnemonic_word_list.index(word) for word in word_key_list]
-        selector_bits = convertSelectorList2Bits(selector_list)
-        return verifyChecksumInSelectorBits(selector_bits)
+        entropy_check_i = convertSelectorList2Bits(selector_list)
+        print('entropy_check_i = %x' % entropy_check_i)
+        return verifyChecksumInSelectorBits(entropy_check_i, mnemonic_length)
 
 if __name__ == '__main__':
-        word_key_list = getMnemonicWordCodeString()
+        word_key_list = getMnemonicWordCodeString(15)
 
         print('mnemonic key list = %s' % word_key_list)
 
