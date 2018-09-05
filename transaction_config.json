@@ -5,10 +5,13 @@
                         "era", "expose", "shift", "afraid", "cradle", "junior", "any",
                         "object", "fat", "addict"
                         ],
-        "Source Info": [{"Address": "", "Redeem Script": ""}, {"Access Key": "m/0", "Redeem Script": ""}],
+        "Source Info": [{"Address": "1FJ5gLvbapvCUEfm5kSCsm4JjWPhPPTRTi", "Private Key WIF": "cTGvyk8TiFcern8Rk1NoiFXAKH2LGuH19qEaVaSc2tX4cftXnhKZ"}, {"Access Key": "m/0"}, {"Redeem Scipt": "OP_2 <A pubkey> <B pubkey> <C pubkey> OP_3 OP_CHECKMULTISIG"}, {"Access Key": "m/1", "Address Type": "P2PKH"}],
+        "In Use Access Keys": {"Segwit": [], "P2PKH": []},
+        "Used Access Keys": {"Segwit": [], "P2PKH": []},
         "Target Info": [{"Address": "bcrt1q5clqxgfv58s30h8qv2fw7v3cqqu3umax6lhdhs", "Amount": 150.0}],
         "Change Info": {"Access Key" : "m/2"},
         "Transaction Fees": 0.002,
         "Locktime": 0,
-        "Network Type": "regtest"
+        "Network Type": "regtest",
+        "Address Amount Limit": 1
 }

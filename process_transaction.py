@@ -12,9 +12,12 @@ my_salt = ''
 
 jsonobj = json.load(open('transaction_config.json', 'rt'))
 
+nettype = jsonobj['Network Type']
+
 N = (1 << 256) - 0x14551231950B75FC4402DA1732FC9BEBF
 
 def get_segwit_address(access_key: str, mnemonic_code: str):
+        global nettype
         #mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
         print('mnemonic code = %s' % mnemonic_code)
         #access_key = jsonobj['Access Key']
@@ -22,11 +25,23 @@ def get_segwit_address(access_key: str, mnemonic_code: str):
         privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
         privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
         pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
-        address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'regtest')
+        address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, nettype)
         #address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'mainnet')
         h_b = pubkey_address.address2hash(address_s)
         h_s = bytes.decode(binascii.hexlify(h_b))
         #print('hash160 of address = %s' % bytes.decode(binascii.hexlify(h_b)))
+        return privkey_wif, pubkey_s, h_s, address_s
+
+def get_p2pkh_address(access_key: str, mnemonic_code: str):
+        print('mnemonic code = %s' % mnemonic_code)
+        seed_b = hd_wallet.generateSeedFromStr(mnemonic_code, "mnemonic" + my_salt)
+        privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
+        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
+        pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
+        address_s = pubkey_address.pubkey2address(pubkey_b, nettype = nettype, is_segwit = False)
+        h_b = pubkey_address.address2hash(address_s)
+        h_s = bytes.decode(binascii.hexlify(h_b))
+        print('hash160 of address = %s' % h_s)
         return privkey_wif, pubkey_s, h_s, address_s
 
 def swap_endian_bytes(in_b: bytes):
@@ -40,7 +55,7 @@ def get_utxos_for_address(addresses: list, amount: float):
         return utxos
 
 def get_funding_address_keys():
-        access_key_list = jsonobj['Access Key Sources']
+        access_key_list = [src['Access Key'] for src in jsonobj['Source Info'] if (('Access Key' in src and 'Address Type' not in src) or ('Access Key' in src and src['Address Type'] == 'P2WPKH'))]
         mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
         keymap_list = []
         for access_key in access_key_list:
@@ -48,10 +63,16 @@ def get_funding_address_keys():
                 keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_segwit_address(access_key, mnemonic_code)
                 print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
                 keymap_list.append(keymap)
+        access_key_list = [src['Access Key'] for src in jsonobj['Source Info'] if ('Access Key' in src and 'Address Type' in src and src['Address Type'] == 'P2PKH')]
+        for access_key in access_key_list:
+                keymap = {}
+                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2pkh_address(access_key, mnemonic_code)
+                print('IIIIIIIIIIII privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
+                keymap_list.append(keymap)
         return keymap_list
 
 def get_change_address_hash():
-        access_key = jsonobj['Access Key Change']
+        access_key = jsonobj['Change Info']['Access Key']
         mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
         privkey, pubkey, witness_program, address = get_segwit_address(access_key, mnemonic_code)
         witness_program_b = binascii.unhexlify(witness_program)
@@ -323,3 +344,6 @@ if __name__ == '__main__':
         print('sig = %s' % bytes.decode(binascii.hexlify(sig_b)))
 
         print('amount 6 => in bytes = %s' % bytes.decode(binascii.hexlify(btc2bytes(6))))
+
+        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/3', 'awake book subject inch gentle blur grant damage process float month clown')
+        print('printkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))

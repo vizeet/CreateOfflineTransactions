@@ -69,13 +69,6 @@ def convertSelectorList2Bits(selector_list: list):
         print('entropy checksum bit count = %d' % entropy_check_bit_count)
         entropy_check_i = reduce(lambda x, y: (x << 11) | y, selector_list)
         print('entropy_check_i = %x' % entropy_check_i)
-#        checksum_bit_count = getChecksumBitCountFromEntropyBitCount(entropy_check_bit_count)
-#        print('checksum_bit_count = %d' % checksum_bit_count)
-#        selector_int = selector_with_checksum_int >> checksum_bit_count
-#        selector_bits = binascii.unhexlify(hex(selector_int)[2:])
-#        selector_bits = binascii.unhexlify('%x' % selector_int)
-#        entropy_check_size_bytes = math.ceil(entropy_check_bit_count / 8)
-#        entropy_check_b = binascii.unhexlify('%x' % selector_with_checksum_i).zfill(entropy_check_size_bytes * 2)
         return entropy_check_i
 
 def getMnemonicWordCodeString(mnemonic_length: int):
