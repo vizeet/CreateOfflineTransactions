@@ -346,4 +346,10 @@ if __name__ == '__main__':
         print('amount 6 => in bytes = %s' % bytes.decode(binascii.hexlify(btc2bytes(6))))
 
         privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/3', 'awake book subject inch gentle blur grant damage process float month clown')
-        print('printkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/4', 'awake book subject inch gentle blur grant damage process float month clown')
+        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/5', 'awake book subject inch gentle blur grant damage process float month clown')
+        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/6', 'awake book subject inch gentle blur grant damage process float month clown')
+        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
