@@ -104,7 +104,7 @@ if __name__ == '__main__':
                 print ("Missing required argument")
                 sys.exit(1)
 
-        mnemonic_code = mnemonic_code.getMnemonicWordCodeString()
+        mnemonic_code = mnemonic_code.getMnemonicWordCodeString(24)
         print('mnemonic code: %s' % mnemonic_code)
         seed_b = generateSeedFromStr(mnemonic_code, "mnemonic" + args.salt)
 

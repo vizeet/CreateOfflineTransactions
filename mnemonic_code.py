@@ -44,7 +44,7 @@ def getEntropyCheckBits(mnemonic_length: int):
 
 def getMnemonicWordList():
         word_list = []
-        with open('mnemonic_word_list_english.txt', 'rt') as word_file:
+        with open('utils/mnemonic_word_list_english.txt', 'rt') as word_file:
                 word_list = word_file.read().splitlines()
         return word_list
 
