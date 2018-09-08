@@ -1,5 +1,5 @@
 import hashlib
-import random_number_generator
+from utils import random_number_generator
 import binascii
 from functools import reduce
 import math

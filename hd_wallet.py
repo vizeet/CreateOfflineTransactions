@@ -1,12 +1,12 @@
 import hashlib
 import mnemonic_code
 import hmac
-import pbkdf2
+from utils import pbkdf2
 import binascii
 import optparse
 import sys
-import bitcoin_secp256k1
-from base58 import base58_decode, base58_encode
+from utility_adapters import bitcoin_secp256k1
+from utils import base58
 import pubkey_address 
 
 # implementation of BIP32
@@ -55,7 +55,7 @@ def encodedSerializationKeys(key: int, chaincode: bytes, depth: int, is_private:
         print('hash = %s' % bytes.decode(binascii.hexlify(h)))
         serialized_key_with_checksum = int(binascii.hexlify(serialized_key + h[0:4]), 16)
         print('with checksum: %x' % serialized_key_with_checksum)
-        encoded_serialized_key = base58_encode(serialized_key_with_checksum)
+        encoded_serialized_key = base58.base58_encode(serialized_key_with_checksum)
 
         return encoded_serialized_key
 

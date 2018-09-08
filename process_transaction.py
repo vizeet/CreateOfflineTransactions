@@ -2,46 +2,42 @@ import hd_wallet
 import json
 import pubkey_address
 import binascii
-import leveldb_parser
+from utils import leveldb_utils
 from functools import reduce
-import hash_utils
+from utility_adapters import hash_utils
 import ecdsa
+from __init__ import g_nettype, g_mnemonic_code, g_source_info, g_change_info, g_target_info, g_transaction_fees, g_locktime
 
 #my_salt = 'test'
 my_salt = ''
 
-jsonobj = json.load(open('transaction_config.json', 'rt'))
-
-nettype = jsonobj['Network Type']
-
 N = (1 << 256) - 0x14551231950B75FC4402DA1732FC9BEBF
 
-def get_segwit_address(access_key: str, mnemonic_code: str):
-        global nettype
-        #mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
-        print('mnemonic code = %s' % mnemonic_code)
-        #access_key = jsonobj['Access Key']
-        seed_b = hd_wallet.generateSeedFromStr(mnemonic_code, "mnemonic" + my_salt)
+def get_segwit_address(access_key: str):
+        global g_nettype, g_mnemonic_code
+        print('mnemonic code = %s' % g_mnemonic_code)
+        seed_b = hd_wallet.generateSeedFromStr(g_mnemonic_code, "mnemonic" + my_salt)
         privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
         privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
         pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
-        address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, nettype)
+        address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, g_nettype)
         #address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'mainnet')
         h_b = pubkey_address.address2hash(address_s)
         h_s = bytes.decode(binascii.hexlify(h_b))
         #print('hash160 of address = %s' % bytes.decode(binascii.hexlify(h_b)))
         return privkey_wif, pubkey_s, h_s, address_s
 
-def get_p2pkh_address(access_key: str, mnemonic_code: str):
-        print('mnemonic code = %s' % mnemonic_code)
-        seed_b = hd_wallet.generateSeedFromStr(mnemonic_code, "mnemonic" + my_salt)
+def get_p2pkh_address(access_key: str):
+        global g_nettype, g_mnemonic_code
+        print('mnemonic code = %s' % g_mnemonic_code)
+        seed_b = hd_wallet.generateSeedFromStr(g_mnemonic_code, "mnemonic" + my_salt)
         privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
         privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
         pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
-        address_s = pubkey_address.pubkey2address(pubkey_b, nettype = nettype, is_segwit = False)
+        address_s = pubkey_address.pubkey2address(pubkey_b, nettype = g_nettype, is_segwit = False)
         h_b = pubkey_address.address2hash(address_s)
         h_s = bytes.decode(binascii.hexlify(h_b))
-        print('hash160 of address = %s' % h_s)
+        #print('hash160 of address = %s' % h_s)
         return privkey_wif, pubkey_s, h_s, address_s
 
 def swap_endian_bytes(in_b: bytes):
@@ -50,53 +46,52 @@ def swap_endian_bytes(in_b: bytes):
 
 # Funding Address is used, returns list of transactions required
 def get_utxos_for_address(addresses: list, amount: float):
-        utxos = leveldb_parser.getRequiredTxnsForAmountInP2WPKH(addresses, amount)
+        utxos = leveldb_utils.getRequiredTxnsForAmountInP2WPKH(addresses, amount)
         print('utxos = %s' % utxos)
         return utxos
 
 def get_funding_address_keys():
-        access_key_list = [src['Access Key'] for src in jsonobj['Source Info'] if (('Access Key' in src and 'Address Type' not in src) or ('Access Key' in src and src['Address Type'] == 'P2WPKH'))]
-        mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
+        global g_source_info
+        access_key_list = [src['Access Key'] for src in g_source_info if (('Access Key' in src and 'Address Type' not in src) or ('Access Key' in src and src['Address Type'] == 'P2WPKH'))]
         keymap_list = []
         for access_key in access_key_list:
                 keymap = {}
-                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_segwit_address(access_key, mnemonic_code)
+                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_segwit_address(access_key)
                 print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
                 keymap_list.append(keymap)
-        access_key_list = [src['Access Key'] for src in jsonobj['Source Info'] if ('Access Key' in src and 'Address Type' in src and src['Address Type'] == 'P2PKH')]
+        access_key_list = [src['Access Key'] for src in g_source_info if ('Access Key' in src and 'Address Type' in src and src['Address Type'] == 'P2PKH')]
         for access_key in access_key_list:
                 keymap = {}
-                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2pkh_address(access_key, mnemonic_code)
-                print('IIIIIIIIIIII privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
+                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2pkh_address(access_key)
+                print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
                 keymap_list.append(keymap)
         return keymap_list
 
 def get_change_address_hash():
-        access_key = jsonobj['Change Info']['Access Key']
-        mnemonic_code = ' '.join(jsonobj['Mnemonic Code'])
-        privkey, pubkey, witness_program, address = get_segwit_address(access_key, mnemonic_code)
+        global g_change_info
+
+        access_key = g_change_info['Access Key']
+        privkey, pubkey, witness_program, address = get_segwit_address(access_key)
         witness_program_b = binascii.unhexlify(witness_program)
         print('change witness_program = %s, change_address = %s' % (witness_program, address))
         return witness_program_b, address
 
-def get_network_fees_satoshis():
-        return int(jsonobj['Transaction Fees'] * 10**8)
+def btc2satoshis(btc: float):
+        return int(btc * (10**8))
+
+def satoshis2btc2(satoshis: int):
+        return satoshis / (10**8)
 
 def get_required_amount():
-        input_amount = reduce(lambda x, y: x + y, [tval['Amount'] for tval in jsonobj['Target Info']])
-        required_amount = input_amount + jsonobj['Transaction Fees']
+        global g_target_info, g_transaction_fees
+        input_amount = reduce(lambda x, y: x + y, [tval['Amount'] for tval in g_target_info])
+        required_amount = input_amount + g_transaction_fees
         return required_amount
 
 address_type_prefix_map = {
         'segwit': ['bc1', 'tb1', 'bcrt1'],
         'script': ['3', '2'],
         'pre_segwit': ['1', 'm', 'n']
-}
-
-address_type_lock_script_map = {
-        'pre_segwit': "OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG",
-        'script': "HASH160 <redeem script> EQUAL",
-        'segwit': "OP_0 <witness program>"
 }
 
 def get_default_script(h: bytes, address_type: str):
@@ -124,9 +119,6 @@ def get_default_locking_script(address: str):
         script_b = get_default_script(h_b, address_type)
         return script_b
         
-def get_locktime():
-        return jsonobj['Locktime']
-
 def btc2bytes(btc: float):
         satoshis = int(btc * (10**8))
         print('satoshis = %s' % satoshis)
@@ -138,12 +130,12 @@ def locktime2bytes(locktime: int):
         return hex_b
 
 def prepare_txn_inputs(utxo_list: list):
+        global g_locktime
         input_count = len(utxo_list)
-        locktime = get_locktime()
         in_txn = bytes([input_count])
         sequence = None
         for utxo in utxo_list:
-                if sequence == None and locktime > 0:
+                if sequence == None and g_locktime > 0:
                         sequence = b'\xee\xff\xff\xff'
                 else:
                         sequence = b'\xff\xff\xff\xff'
@@ -156,15 +148,16 @@ def get_input_satoshis(utxo_list: list):
         return input_satoshis
 
 def prepare_txn_outs(utxo_list: list, req_amount: float):
-        target_count = len(jsonobj['Target Info'])
+        global g_target_info, g_transaction_fees
+        target_count = len(g_target_info)
         out_count = target_count + 1
         input_btc = get_input_satoshis(utxo_list) / (10 ** 8)
         print('input_btc = %.8f' % input_btc)
-        change_btc = input_btc - req_amount - jsonobj['Transaction Fees']
+        change_btc = input_btc - req_amount - g_transaction_fees
         print('change_btc = %.8f' % change_btc)
 
         out_txn = bytes([out_count])
-        for target in jsonobj['Target Info']:
+        for target in g_target_info:
                 amount_b = btc2bytes(target['Amount'])
                 address = target['Address']
                 script_b = get_default_locking_script(address)
@@ -179,6 +172,7 @@ def prepare_txn_outs(utxo_list: list, req_amount: float):
         return out_txn
 
 def prepare_raw_txn():
+        global g_locktime
         version = b'\x02\x00\x00\x00'
         req_amount = get_required_amount()
         print('required amount = %.8f' % req_amount)
@@ -190,8 +184,7 @@ def prepare_raw_txn():
         print('txnin = %s' % bytes.decode(binascii.hexlify(txnin)))
         txnout = prepare_txn_outs(utxo_list, req_amount)
         print('txnout = %s' % bytes.decode(binascii.hexlify(txnout)))
-        locktime = get_locktime()
-        locktime_b = locktime2bytes(locktime)
+        locktime_b = locktime2bytes(g_locktime)
         return version + txnin + txnout + locktime_b
 
 def get_hash_prevouts(utxo_list: list):
@@ -202,11 +195,11 @@ def get_hash_prevouts(utxo_list: list):
         return hash_utils.hash256(prevouts) 
 
 def get_hash_sequence(utxo_list: list):
+        global g_locktime
         sequence = None
         concatenated_sequences = b''
-        locktime = get_locktime()
         for utxo in utxo_list:
-                if sequence == None and locktime > 0:
+                if sequence == None and g_locktime > 0:
                         sequence = b'\xee\xff\xff\xff'
                 else:
                         sequence = b'\xff\xff\xff\xff'
@@ -215,12 +208,13 @@ def get_hash_sequence(utxo_list: list):
         return hash_utils.hash256(concatenated_sequences) 
 
 def get_hash_outs(utxo_list):
+        global g_target_info
         out_txn = b''
         req_amount = get_required_amount()
         input_btc = get_input_satoshis(utxo_list) / (10 ** 8)
         print('input_btc = %.8f' % input_btc)
         change_btc = input_btc - req_amount
-        for target in jsonobj['Target Info']:
+        for target in g_target_info:
                 amount_b = btc2bytes(target['Amount'])
                 address = target['Address']
                 script_b = get_default_locking_script(address)
@@ -248,8 +242,8 @@ def get_hash_outs(utxo_list):
 #    nLockTime:    11000000
 #    nHashType:    01000000
 def get_preimage_list(utxo_list: list):
-        locktime = get_locktime()
-        locktime_b = locktime2bytes(locktime)
+        global g_locktime
+        locktime_b = locktime2bytes(g_locktime)
         keymap_list = get_funding_address_keys()
         address_list = [keymap['address'] for keymap in keymap_list]
         req_amount = get_required_amount()
@@ -265,7 +259,7 @@ def get_preimage_list(utxo_list: list):
                 amount_satoshi = utxo['value']
                 amount_b = btc2bytes(amount_satoshi / (10 ** 8))
                 witness_program = binascii.unhexlify(utxo['hash160'])
-                if sequence == None and locktime > 0:
+                if sequence == None and g_locktime > 0:
                         sequence = b'\xee\xff\xff\xff'
                 else:
                         sequence = b'\xff\xff\xff\xff'
@@ -283,12 +277,12 @@ def sign_txn_input(preimage: bytes, privkey_wif: str):
         print('privkey_s = %s' % privkey_s)
         privkey_b = binascii.unhexlify(privkey_s)[:-1]
         signingkey = ecdsa.SigningKey.from_string(privkey_b, curve=ecdsa.SECP256k1)
-        #sig_b = signingkey.sign_digest(hash_preimage, sigencode=ecdsa.util.sigencode_der) +b'\x01'
         sig_b = signingkey.sign_digest(hash_preimage, sigencode=ecdsa.util.sigencode_der_canonize) +b'\x01'
         print('sig = %s' % bytes.decode(binascii.hexlify(sig_b)))
         return sig_b
 
 def prepare_signed_txn():
+        global g_locktime
         req_amount = get_required_amount()
         version = binascii.unhexlify('%08x' % 0x02)[::-1]
         marker = b'\x00'
@@ -312,8 +306,7 @@ def prepare_signed_txn():
                 witness_b += bytes([len(pubkey_b)])
                 witness_b += pubkey_b
                 print('address = %s, signature = %s, preimage = %s' % (utxo['address'], bytes.decode(binascii.hexlify(sig_b)), bytes.decode(binascii.hexlify(preimage))))
-        locktime = get_locktime()
-        locktime_b = locktime2bytes(locktime)
+        locktime_b = locktime2bytes(g_locktime)
         print('locktime_b = %s' % bytes.decode(binascii.hexlify(locktime_b)))
         print('preimage_list = %s' % [bytes.decode(binascii.hexlify(preimage)) for preimage in preimage_list])
         signed_txn = version + marker + segwit_flag + txn_inputs + txn_outs + witness_b + locktime_b
@@ -339,17 +332,18 @@ if __name__ == '__main__':
         privkey = '619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9'.zfill(64)
         txhash = 'c37af31116d1b27caf68aae9e3ac82f1477929014d5b917657d0eb49478cb670'.zfill(64)
         signingkey = ecdsa.SigningKey.from_string(binascii.unhexlify(privkey), curve=ecdsa.SECP256k1)
-        sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der) + b'\x01'
-        #sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der_canonize) + b'\x01'
+        #sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der) + b'\x01'
+        sig_b = signingkey.sign_digest(binascii.unhexlify(txhash), sigencode=ecdsa.util.sigencode_der_canonize) + b'\x01'
         print('sig = %s' % bytes.decode(binascii.hexlify(sig_b)))
+        #vk = ecdsa.VerifyingKey.from_string(pubkey_b, curve=ecdsa.SECP256k1)
 
         print('amount 6 => in bytes = %s' % bytes.decode(binascii.hexlify(btc2bytes(6))))
 
-        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/3', 'awake book subject inch gentle blur grant damage process float month clown')
-        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
-        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/4', 'awake book subject inch gentle blur grant damage process float month clown')
-        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
-        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/5', 'awake book subject inch gentle blur grant damage process float month clown')
-        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
-        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/6', 'awake book subject inch gentle blur grant damage process float month clown')
-        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+#        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/3', 'awake book subject inch gentle blur grant damage process float month clown')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+#        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/4', 'awake book subject inch gentle blur grant damage process float month clown')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+#        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/5', 'awake book subject inch gentle blur grant damage process float month clown')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))
+#        privkey_wif, pubkey_s, h_s, address_s = get_p2pkh_address('m/6', 'awake book subject inch gentle blur grant damage process float month clown')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s, h_s, address_s))

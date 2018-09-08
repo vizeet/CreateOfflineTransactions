@@ -1,10 +1,10 @@
-import bitcoin_secp256k1
-from bitcoin_secp256k1 import P
+from utility_adapters import bitcoin_secp256k1
+from utility_adapters.bitcoin_secp256k1 import P
 import binascii
-import bitcoin_base58
-import base58
-import hash_utils
-import bitcoin_bech32
+from utility_adapters import bitcoin_base58
+from utils import base58
+from utility_adapters import hash_utils
+from utils import bech32
 
 network_type = ['mainnet', 'testnet', 'regtest']
 segwit_address_prefix = {'mainnet': 'bc', 'testnet': 'tb', 'regtest': 'bcrt'}
@@ -97,8 +97,8 @@ def hash2address(h: bytes, nettype: str, is_segwit: bool, is_script: bool):
 def address2hash(address: str):
         is_segwit = (address[0:3] == 'bc1' or address[0:3] == 'tb1' or address[0:5] == 'bcrt1')
         if is_segwit:
-                hrp, h_list = bitcoin_bech32.bech32_decode(address)
-                witver, h_list = bitcoin_bech32.decode(hrp, address)
+                hrp, h_list = bech32.bech32_decode(address)
+                witver, h_list = bech32.decode(hrp, address)
                 print('h_list = %s' % h_list)
                 h_b = bytes(h_list)
         else:
@@ -115,11 +115,11 @@ def addressCheckVerify(address: str):
                                 'tb1', # testnet
                                 'bcrt1' # regtest
                              ]:
-                is_valid = bitcoin_bech32.addressVerify(address)
+                is_valid = bech32.addressVerify(address)
         return is_valid
 
 def witnessProgram2address(hrp: str, witver: int, witprog: bytes):
-        return bitcoin_bech32.encode(hrp, witver, witprog)
+        return bech32.encode(hrp, witver, witprog)
 
 def privkeyHex2Wif(privkey: int, is_testnet: bool, for_compressed_pubkey: bool):
         wif = bitcoin_base58.encodeWifPrivkey(privkey, is_testnet, for_compressed_pubkey)
