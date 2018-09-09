@@ -2,7 +2,7 @@ import hd_wallet
 import json
 import pubkey_address
 import binascii
-from utils import leveldb_utils
+from utility_adapters import leveldb_utils
 from functools import reduce
 from utility_adapters import hash_utils
 import ecdsa
@@ -46,7 +46,9 @@ def swap_endian_bytes(in_b: bytes):
 
 # Funding Address is used, returns list of transactions required
 def get_utxos_for_address(addresses: list, amount: float):
-        utxos = leveldb_utils.getRequiredTxnsForAmountInP2WPKH(addresses, amount)
+        global g_nettype
+        ldb_adapter = leveldb_utils.LevelDBAdapter(g_nettype)
+        utxos = ldb_adapter.getRequiredTxnsForAmountInP2WPKH(addresses, amount)
         print('utxos = %s' % utxos)
         return utxos
 
