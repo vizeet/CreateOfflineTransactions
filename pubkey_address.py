@@ -48,17 +48,17 @@ def uncompressPubkey(x_b: bytes):
         return full_pubkey_b
 
 ### pre-segwit [
-def pkh2address(pkh: bytes, is_testnet: bool):
-        address = bitcoin_base58.forAddress(pkh, is_testnet, False)
+def pkh2address(pkh: bytes, nettype: str):
+        address = bitcoin_base58.forAddress(pkh, nettype, False)
         return address
 
-def sh2address(sh: bytes, is_testnet: bool):
-        address = bitcoin_base58.forAddress(sh, is_testnet, True)
+def sh2address(sh: bytes, nettype: str):
+        address = bitcoin_base58.forAddress(sh, nettype, True)
         return address
 
-def redeemScript2address(script: bytes, is_testnet: bool):
+def redeemScript2address(script: bytes, nettype: str):
         sh = hash_utils.hash160(script)
-        address = sh2address(sh, is_testnet)
+        address = sh2address(sh, nettype)
         return address
 
 ### ] segwit [
@@ -121,8 +121,8 @@ def addressCheckVerify(address: str):
 def witnessProgram2address(hrp: str, witver: int, witprog: bytes):
         return bech32.encode(hrp, witver, witprog)
 
-def privkeyHex2Wif(privkey: int, is_testnet: bool, for_compressed_pubkey: bool):
-        wif = bitcoin_base58.encodeWifPrivkey(privkey, is_testnet, for_compressed_pubkey)
+def privkeyHex2Wif(privkey: int, nettype: str, for_compressed_pubkey: bool):
+        wif = bitcoin_base58.encodeWifPrivkey(privkey, nettype, for_compressed_pubkey)
         return wif
 
 def privkeyWif2Hex(privkey: str):

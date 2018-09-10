@@ -13,17 +13,32 @@ my_salt = ''
 
 N = (1 << 256) - 0x14551231950B75FC4402DA1732FC9BEBF
 
-def get_segwit_address(access_key: str):
+def get_p2wpkh_address(access_key: str):
         global g_nettype, g_mnemonic_code
         print('mnemonic code = %s' % g_mnemonic_code)
         seed_b = hd_wallet.generateSeedFromStr(g_mnemonic_code, "mnemonic" + my_salt)
         privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
-        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
+        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, g_nettype, True)
         pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
         address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, g_nettype)
-        #address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, 'mainnet')
         h_b = pubkey_address.address2hash(address_s)
         h_s = bytes.decode(binascii.hexlify(h_b))
+        #print('hash160 of address = %s' % bytes.decode(binascii.hexlify(h_b)))
+        return privkey_wif, pubkey_s, h_s, address_s
+
+def get_p2sh_p2wpkh_address(access_key: str):
+        global g_nettype, g_mnemonic_code
+        print('mnemonic code = %s' % g_mnemonic_code)
+        seed_b = hd_wallet.generateSeedFromStr(g_mnemonic_code, "mnemonic" + my_salt)
+        privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
+        privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, g_nettype, True)
+        pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
+        address_s = pubkey_address.pubkey2segwitaddr(pubkey_b, g_nettype)
+        h_b = pubkey_address.address2hash(address_s)
+        h_s = bytes.decode(binascii.hexlify(h_b))
+        script_b = b'\x00\x14' + h_b
+        address_s = pubkey_address.redeemScript2address(script_b, g_nettype)
+        print('P2SH-P2WPKH Address = %s, script = %s' % (address_s, bytes.decode(binascii.hexlify(script_b))))
         #print('hash160 of address = %s' % bytes.decode(binascii.hexlify(h_b)))
         return privkey_wif, pubkey_s, h_s, address_s
 
@@ -54,14 +69,20 @@ def get_utxos_for_address(addresses: list, amount: float):
 
 def get_funding_address_keys():
         global g_source_info
-        access_key_list = [src['Access Key'] for src in g_source_info if (('Access Key' in src and 'Address Type' not in src) or ('Access Key' in src and src['Address Type'] == 'P2WPKH'))]
+        access_key_list = [src['Access Key'] for src in g_source_info if ('Access Key' in src and src['Address Type'] == 'P2WPKH')]
         keymap_list = []
         for access_key in access_key_list:
                 keymap = {}
-                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_segwit_address(access_key)
+                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2wpkh_address(access_key)
                 print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
                 keymap_list.append(keymap)
-        access_key_list = [src['Access Key'] for src in g_source_info if ('Access Key' in src and 'Address Type' in src and src['Address Type'] == 'P2PKH')]
+        access_key_list = [src['Access Key'] for src in g_source_info if ('Access Key' in src and src['Address Type'] == 'P2SH-P2WPKH')]
+        for access_key in access_key_list:
+                keymap = {}
+                keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2sh_p2wpkh_address(access_key)
+                print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address']))
+                keymap_list.append(keymap)
+        access_key_list = [src['Access Key'] for src in g_source_info if ('Access Key' in src and src['Address Type'] == 'P2PKH')]
         for access_key in access_key_list:
                 keymap = {}
                 keymap['privkey'], keymap['pubkey'], keymap['hash160'], keymap['address'] = get_p2pkh_address(access_key)
@@ -73,7 +94,7 @@ def get_change_address_hash():
         global g_change_info
 
         access_key = g_change_info['Access Key']
-        privkey, pubkey, witness_program, address = get_segwit_address(access_key)
+        privkey, pubkey, witness_program, address = get_p2wpkh_address(access_key)
         witness_program_b = binascii.unhexlify(witness_program)
         print('change witness_program = %s, change_address = %s' % (witness_program, address))
         return witness_program_b, address
@@ -319,7 +340,7 @@ def process_transaction():
         pass
 
 if __name__ == '__main__':
-        #privkey, pubkey, h160, address = get_segwit_address()
+        #privkey, pubkey, h160, address = get_p2wpkh_address()
         #print('privkey = %s, pubkey = %s, hash160 = %s, address = %s' % (privkey, pubkey, h160, address))
         #utxos = get_utxos_for_address(address, amount = 125)
         #print('utxos = %s' % utxos)
