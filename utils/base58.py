@@ -53,7 +53,7 @@ def base58checkEncode(prefix: bytes, h: bytes):
 def base58checkDecode(s: str):
         with_checksum_int = base58_decode(s)
         with_checksum_b = binascii.unhexlify('%x' % with_checksum_int)
-        decode_b = with_checksum_b[0:-4]
+        decode_b = with_checksum_b[1:-4]
         return decode_b
 
 def base58checkVerify(prefix: str, val: str):
@@ -117,4 +117,7 @@ if __name__ == '__main__':
         b58_str = 'xprv9u5MtGh9yEv5L2KZDwmUSpd9SPgCYFg5ehkboGez6Wsw5Tw3Z6K5ocPH6gqNECkjUtZmiqbXcYJNYzf3HnzVLMxwzk8ewAQPmPjgjMRJUUj'
 #        b58_str = 'xprv9u5MtGhJJuT3VWTbNxniyUb5JieoKHJFfcJhgQ2xt7AXsDBjyi3GqeWUZst5qYsR8B15HVYzgDJ97m43eVHgFXVNqdEJqtUPhqGDGYuwC98'
         print('base 58 decode = %x' % base58_decode(b58_str))
-
+        
+        address = '2MxsKZXkDiaJw5LbHyzNGBGksM42MF7GXMh'
+        b58_decode = base58_decode(address)
+        print('%x' % b58_decode)

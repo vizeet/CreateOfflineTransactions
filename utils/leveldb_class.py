@@ -281,7 +281,7 @@ class LevelDB:
 
         def getObfuscationKey(self):
                 value = self.chainstatedb.get(b'\x0e\x00' + b'obfuscate_key')
-                print('obfuscation key = %s' % value)
+                #print('obfuscation key = %s' % value)
                 obfuscation_key = value[1:]
                 return obfuscation_key
 
@@ -303,7 +303,7 @@ class LevelDB:
                 value = self.applyObfuscationKey(value)
                 code, pos = b128_varint_decode(value)
                 jsonobj['height'] = code >> 1
-                jsonobj['is_coinbase'] = code & 0x01
+                jsonobj['is_coinbase'] = ((code & 0x01) > 0)
                 compressed_amount, pos = b128_varint_decode(value, pos)
                 jsonobj['amount'] = amount_decompress(compressed_amount)
                 jsonobj['script_type'], pos = b128_varint_decode(value, pos)
@@ -359,6 +359,10 @@ class LevelDB:
                 block_hash_b = self.applyObfuscationKey(block_hash_b)
                 return block_hash_b
 
+def swap_endian_bytes(in_b: bytes):
+        out_b = in_b[::-1]
+        return out_b
+
 if __name__ == '__main__':
 #        txn_hash_str = 'd6030272a4e430b293c7f6152398ea47d8485e2e8c1719f841c9665ffee6a237'
 #        t = binascii.unhexlify(txn_hash_str)[::-1]
@@ -383,8 +387,14 @@ if __name__ == '__main__':
 #        jsonobj = getChainstateData(binascii.unhexlify('0060c16adcf98e70c1d9e8c971ad9f27d3363394993156691ec9f3a46c4c4a4d'), 1822)
 #        print(jsonobj)
         #check_varint(2000000)
-        t1 = datetime.now()
-        iterateChainstateDBForP2WPKH()
-        t2 = datetime.now()
-        delta = t2 - t1
-        print('time to iterate chainstatedb %d:%d:%d' % (delta.seconds // 3600, delta.seconds // 60, delta.seconds))
+#        t1 = datetime.now()
+#        iterateChainstateDBForP2WPKH()
+#        t2 = datetime.now()
+#        delta = t2 - t1
+#        print('time to iterate chainstatedb %d:%d:%d' % (delta.seconds // 3600, delta.seconds // 60, delta.seconds))
+
+        ldb = LevelDB('regtest')
+        txn_b = swap_endian_bytes(binascii.unhexlify('3b78c71afff6f819ada738eddc5ad0e70a1836ec74b7f8d47f4eb86cb052695a'))
+        print('txn = %s' % bytes.decode(binascii.hexlify(txn_b)))
+        jsonobj = ldb.getChainstateData(txn_b, 0)
+        print('jsonobj = %s' % jsonobj)

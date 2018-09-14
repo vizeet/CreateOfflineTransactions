@@ -17,3 +17,9 @@ if __name__ == '__main__':
         script = '001479091972186c449eb1ded22b78e40d009bdf0089'
         h160 = hash160(binascii.unhexlify(script))
         print('h160 = %s' % bytes.decode(binascii.hexlify(h160)))
+        script = '001466d7bffb85fa80f006863750f6565cf481d2b542'
+        h160 = hash160(binascii.unhexlify(script))
+        print('h160 = %s' % bytes.decode(binascii.hexlify(h160)))
+        script = '0014c95fcd5a10525c8c01119cc4e7b894f30361bc4d'
+        h160 = hash160(binascii.unhexlify(script))
+        print('h160 = %s' % bytes.decode(binascii.hexlify(h160)))
