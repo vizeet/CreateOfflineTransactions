@@ -7,6 +7,50 @@ class LevelDBAdapter:
                 self.nettype = nettype
                 self.ldb = leveldb_class.LevelDB(nettype = nettype)
 
+        def getRequiredTxnsForAmountInP2PKH(self, addresses: list, amount: float):
+                remaining_amount = amount
+                #it = chainstate_db.iterator(include_value=False)
+                it = self.ldb.getIteratorChainstateDB()
+                required_hash160_b_list = [pubkey_address.address2hash(address) for address in addresses]
+                for required_h160 in required_hash160_b_list:
+                        print('YYYYYY required_h160 = %s' % (bytes.decode(binascii.hexlify(required_h160))))
+                ret_dict = []
+                while remaining_amount > 0:
+                        try:
+                                key = next(it)
+                        except StopIteration:
+                                break
+                        prefix = key[0:1]
+                        if prefix == b'C':
+                                out_index, pos = leveldb_class.b128_varint_decode(key[33:])
+                                txn_hash_big_endian_b = key[1:33]
+                                txn_hash_little_endian = bytes.decode(binascii.hexlify(key[1:33][::-1]))
+                                jsonobj = self.ldb.getChainstateData(txn_hash_big_endian_b, out_index)
+                                if jsonobj['script_type'] == 0 :
+                                        size_hash = int(binascii.hexlify(jsonobj['script'][2:3]), 16)
+                                        print('JJJJJJJJJJJJJ script = %s' % bytes.decode(binascii.hexlify(jsonobj['script'])))
+                                        hash160_b = jsonobj['script'][3:3 + size_hash]
+                                        recent_block_hash = self.ldb.getRecentBlockHash()
+                                        recent_block_height = self.ldb.getBlockIndex(recent_block_hash)['height']
+                                        block_height = jsonobj['height']
+                                        block_depth = recent_block_height - block_height
+                                        print('block depth = %d' % block_depth)
+                                        # coinbase transaction can be redeemed only after 100th confirmation
+                                        if (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == False) or (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == True and block_depth >= 100):
+                                                address = pubkey_address.pkh2address(hash160_b, self.nettype)
+                                                value = jsonobj['amount']
+                                                print('txn_id = %s, out_index = %s, height = %d, hash160 = %s, address = %s, value = %d' % (txn_hash_little_endian, out_index, jsonobj['height'], bytes.decode(binascii.hexlify(hash160_b)), address, value))
+                                                txn_info = {}
+                                                txn_info['txn_id'] = txn_hash_little_endian
+                                                txn_info['out_index'] = out_index
+                                                txn_info['height'] = block_height
+                                                txn_info['hash160'] = bytes.decode(binascii.hexlify(hash160_b))
+                                                txn_info['address'] = address
+                                                txn_info['value'] = value
+                                                ret_dict.append(txn_info)
+                                                remaining_amount = remaining_amount - (value / 100000000)
+                return ret_dict
+
         def getRequiredTxnsForAmountInP2WPKH(self, addresses: list, amount: float):
                 remaining_amount = amount
                 #it = chainstate_db.iterator(include_value=False)
