@@ -80,7 +80,7 @@ class LevelDBAdapter:
                                                 block_depth = recent_block_height - block_height
                                                 print('block depth = %d' % block_depth)
                                                 # coinbase transaction can be redeemed only after 100th confirmation
-                                                if (hash160_b in required_hash160_b_list) or (jsonobj['is_coinbase'] == True and block_depth >= 100):
+                                                if (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == False) or (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == True and block_depth >= 100):
                                                         witver = 0x00
                                                         #hrp = 'bc'
                                                         hrp = 'bcrt'
@@ -127,7 +127,7 @@ class LevelDBAdapter:
                                         block_depth = recent_block_height - block_height
                                         print('block depth = %d' % block_depth)
                                         # coinbase transaction can be redeemed only after 100th confirmation
-                                        if (hash160_b in required_hash160_b_list) or (jsonobj['is_coinbase'] == True and block_depth >= 100):
+                                        if (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == False) or (hash160_b in required_hash160_b_list and jsonobj['is_coinbase'] == True and block_depth >= 100):
                                                 address = pubkey_address.sh2address(hash160_b, self.nettype)
                                                 value = jsonobj['amount']
                                                 print('txn_id = %s, out_index = %s, height = %d, hash160 = %s, address = %s, value = %d' % (txn_hash_little_endian, out_index, jsonobj['height'], bytes.decode(binascii.hexlify(hash160_b)), address, value))
