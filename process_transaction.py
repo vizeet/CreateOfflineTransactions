@@ -61,6 +61,12 @@ def get_p2sh_address_from_pubkey_list(pubkey_list: list, unlock_key_threshold: i
         address = pubkey_address.redeemScript2address(redeem_script_b, g_nettype)
         return address
 
+def get_p2wsh_address_from_pubkey_list(pubkey_list: list, unlock_key_threshold: int):
+        redeem_script_b = get_redeem_script_from_pubkey_list(pubkey_list, unlock_key_threshold)
+        witprog = hash_utils.sha256(redeem_script_b)
+        address = pubkey_address.hash2segwitaddr(witprog, g_nettype)
+        return address
+
 def get_p2sh_keymaplist(access_key_list: str):
         global g_nettype, g_mnemonic_code
         print('mnemonic code = %s' % g_mnemonic_code)
@@ -71,6 +77,21 @@ def get_p2sh_keymaplist(access_key_list: str):
                 privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
                 pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
                 address_s = pubkey_address.pubkey2address(pubkey_b, nettype = g_nettype, is_segwit = False)
+                h_b = pubkey_address.address2hash(address_s)
+                h_s = bytes.decode(binascii.hexlify(h_b))
+                keylist.append({'privkey': privkey_wif, 'pubkey': pubkey_s, 'hash160': h_s, 'addess': address_s})
+        return keylist
+
+def get_p2wsh_keymaplist(access_key_list: str):
+        global g_nettype, g_mnemonic_code
+        print('mnemonic code = %s' % g_mnemonic_code)
+        seed_b = hd_wallet.generateSeedFromStr(g_mnemonic_code, "mnemonic" + my_salt)
+        keylist = []
+        for access_key in access_key_list:
+                privkey_i, pubkey_b = hd_wallet.generatePrivkeyPubkeyPair(access_key, seed_b, True)
+                privkey_wif = pubkey_address.privkeyHex2Wif(privkey_i, True, True)
+                pubkey_s = bytes.decode(binascii.hexlify(pubkey_b))
+                address_s = pubkey_address.pubkey2address(pubkey_b, nettype = g_nettype, is_segwit = True)
                 h_b = pubkey_address.address2hash(address_s)
                 h_s = bytes.decode(binascii.hexlify(h_b))
                 keylist.append({'privkey': privkey_wif, 'pubkey': pubkey_s, 'hash160': h_s, 'addess': address_s})
@@ -116,6 +137,13 @@ def get_utxos_for_address_p2sh(addresses: list, amount: float):
         print('utxos = %s' % utxos)
         return utxos
 
+def get_utxos_for_address_p2wsh(addresses: list, amount: float):
+        global g_nettype
+        ldb_adapter = leveldb_utils.LevelDBAdapter(g_nettype)
+        utxos = ldb_adapter.getRequiredTxnsForAmountInP2WSH(addresses, amount)
+        print('utxos = %s' % utxos)
+        return utxos
+
 def get_funding_address_keys():
         global g_source_info
         keymap_list = []
@@ -142,6 +170,19 @@ def get_funding_address_keys():
 
         print('YYYYYYYYYYYYYYYYYYY keymap_list = %s' % keymap_list)
         return keymap_list
+
+def get_funding_address_keys_p2wsh():
+        global g_source_info
+        keymaplist_list = []
+        access_keys_list = [src for src in g_source_info['P2WSH'] if 'Access Keys' in src]
+        print('access_keys_list = %s' % access_keys_list)
+        for access_keys in access_keys_list:
+                keymaplist  = {'Keymap List': get_p2wsh_keymaplist(access_keys['Access Keys']), 'Lock Key Count': access_keys['Lock Key Count'], 'Unlock Key Threshold': access_keys['Unlock Key Threshold']}
+                print('keymaplist = %s' % keymaplist)
+                keymaplist_list.append(keymaplist)
+
+        print('KKKKKKKKKKKKKKKKK keymaplist_list = %s' % keymaplist_list)
+        return keymaplist_list
 
 def get_funding_address_keys_p2sh():
         global g_source_info
@@ -323,7 +364,7 @@ def prepare_txn_inputs_p2pkh(utxo_list: list, preimage_list: list, address_privk
                 in_txn += swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1] + scriptsig_size_b + scriptsig_b + sequence
         return in_txn
 
-def prepare_txn_inputs_p2wpkh(utxo_list: list):
+def prepare_txn_inputs_bare_witness(utxo_list: list):
         global g_locktime
         input_count = len(utxo_list)
         in_txn = bytes([input_count])
@@ -336,6 +377,20 @@ def prepare_txn_inputs_p2wpkh(utxo_list: list):
                 scriptsig_size = b'\x00' # for bare witness
                 in_txn += swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1] + scriptsig_size + sequence
         return in_txn
+
+#def prepare_txn_inputs_p2wpkh(utxo_list: list):
+#        global g_locktime
+#        input_count = len(utxo_list)
+#        in_txn = bytes([input_count])
+#        sequence = None
+#        for utxo in utxo_list:
+#                if sequence == None and g_locktime > 0:
+#                        sequence = b'\xee\xff\xff\xff'
+#                else:
+#                        sequence = b'\xff\xff\xff\xff'
+#                scriptsig_size = b'\x00' # for bare witness
+#                in_txn += swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1] + scriptsig_size + sequence
+#        return in_txn
 
 def prepare_txn_inputs(utxo_list: list):
         global g_locktime
@@ -489,7 +544,7 @@ def get_preimage_list_p2sh(utxo_list: list, address_pubkeys_map: dict, address_u
                 counter += 1
         return preimage_list
 
-def get_preimage_list_p2pkh(utxo_list: list, keymap_list: list):
+def get_preimage_list_p2pkh(utxo_list: list):
         global g_locktime
         version = binascii.unhexlify('%08x' % 0x02)[::-1]
         req_amount = get_required_amount()
@@ -517,6 +572,44 @@ def get_preimage_list_p2pkh(utxo_list: list, keymap_list: list):
         return preimage_list
 
 #    nVersion:     01000000
+#    hashPrevouts: ef546acf4a020de3898d1b8956176bb507e6211b5ed3619cd08b6ea7e2a09d41
+#    hashSequence: 0000000000000000000000000000000000000000000000000000000000000000
+#    outpoint:     0815cf020f013ed6cf91d29f4202e8a58726b1ac6c79da47c23d1bee0a6925f800000000
+#    scriptCode:   (see below)
+#    amount:       0011102401000000
+#    nSequence:    ffffffff
+#    hashOutputs:  0000000000000000000000000000000000000000000000000000000000000000 (this is the second input but there is only one output)
+#    nLockTime:    00000000
+#    nHashType:    03000000
+def get_preimage_list_p2wsh(utxo_list: list, address_pubkeys_map: dict, address_unlock_key_threshold_map: dict):
+        global g_locktime
+        locktime_b = locktime2bytes(g_locktime)
+        req_amount = get_required_amount()
+        version = binascii.unhexlify('%08x' % 0x02)[::-1]
+        hash_prevouts = get_hash_prevouts(utxo_list)
+        hash_sequence = get_hash_sequence(utxo_list)
+        hash_outs = get_hash_outs(utxo_list)
+        sighash_all = binascii.unhexlify('%08x' % 0x01)[::-1]
+        preimage_list = []
+        sequence = None
+        for utxo in utxo_list:
+                outpoint = swap_endian_bytes(binascii.unhexlify(utxo['txn_id'])) + binascii.unhexlify('%08x' % utxo['out_index'])[::-1]
+                amount_satoshi = utxo['value']
+                amount_b = btc2bytes(amount_satoshi / (10 ** 8))
+                witness_program = binascii.unhexlify(utxo['sha256'])
+                if sequence == None and g_locktime > 0:
+                        sequence = b'\xee\xff\xff\xff'
+                else:
+                        sequence = b'\xff\xff\xff\xff'
+                redeem_script_b = get_redeem_script_from_pubkey_list(address_pubkeys_map[utxo['address']], address_unlock_key_threshold_map[utxo['address']])
+                redeem_script_size_b = bytes([len(redeem_script_b)])
+                #redeem_script_size_b = script_utils.encode_pushdata(len(redeem_script_b))
+                preimage = version + hash_prevouts + hash_sequence + outpoint + redeem_script_size_b + redeem_script_b + amount_b + sequence + hash_outs + locktime_b + sighash_all
+                print('version = %s, hash_prevouts = %s, hash_sequence = %s, outpoint = %s, redeem_script_size = %s, redeem_script = %s, amount = %s, sequence = %s, hash_outs = %s, locktime = %s, sighash_all = %s' % (bytes.decode(binascii.hexlify(version)), bytes.decode(binascii.hexlify(hash_prevouts)), bytes.decode(binascii.hexlify(hash_sequence)), bytes.decode(binascii.hexlify(outpoint)), bytes.decode(binascii.hexlify(redeem_script_size_b)), bytes.decode(binascii.hexlify(redeem_script_b)), bytes.decode(binascii.hexlify(amount_b)), bytes.decode(binascii.hexlify(sequence)), bytes.decode(binascii.hexlify(hash_outs)), bytes.decode(binascii.hexlify(locktime_b)), bytes.decode(binascii.hexlify(sighash_all))))
+                preimage_list.append(preimage)
+        return preimage_list
+
+#    nVersion:     01000000
 #    hashPrevouts: 96b827c8483d4e9b96712b6713a7b68d6e8003a781feba36c31143470b4efd37
 #    hashSequence: 52b0a642eea2fb7ae638c36f6252b6750293dbe574a806984b8e4d8548339a3b
 #    outpoint:     ef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a01000000
@@ -526,11 +619,9 @@ def get_preimage_list_p2pkh(utxo_list: list, keymap_list: list):
 #    hashOutputs:  863ef3e1a92afbfdb97f31ad0fc7683ee943e9abcf2501590ff8f6551f47e5e5
 #    nLockTime:    11000000
 #    nHashType:    01000000
-def get_preimage_list_p2wpkh(utxo_list: list, keymap_list: list):
+def get_preimage_list_p2wpkh(utxo_list: list):
         global g_locktime
         locktime_b = locktime2bytes(g_locktime)
-        #keymap_list = get_funding_address_keys_p2wpkh()
-        address_list = [keymap['address'] for keymap in keymap_list]
         req_amount = get_required_amount()
         version = binascii.unhexlify('%08x' % 0x02)[::-1]
         hash_prevouts = get_hash_prevouts(utxo_list)
@@ -565,11 +656,9 @@ def get_preimage_list_p2wpkh(utxo_list: list, keymap_list: list):
 #    hashOutputs:  de984f44532e2173ca0d64314fcefe6d30da6f8cf27bafa706da61df8a226c83
 #    nLockTime:    92040000
 #    nHashType:    01000000
-def get_preimage_list_p2sh_p2wpkh(utxo_list: list, keymap_list: list, address_script_map: dict):
+def get_preimage_list_p2sh_p2wpkh(utxo_list: list, address_script_map: dict):
         global g_locktime
         locktime_b = locktime2bytes(g_locktime)
-        #keymap_list = get_funding_address_keys_p2wpkh()
-        address_list = [keymap['address'] for keymap in keymap_list]
         req_amount = get_required_amount()
         version = binascii.unhexlify('%08x' % 0x02)[::-1]
         hash_prevouts = get_hash_prevouts(utxo_list)
@@ -617,9 +706,9 @@ def prepare_signed_txn_p2wpkh():
         keymap_list = get_funding_address_keys_p2wpkh()
         address_list = [keymap['address'] for keymap in keymap_list]
         utxo_list = get_utxos_for_address_p2wpkh(address_list, req_amount)
-        txn_inputs = prepare_txn_inputs_p2wpkh(utxo_list)
+        txn_inputs = prepare_txn_inputs_bare_witness(utxo_list)
         txn_outs = prepare_txn_outs(utxo_list, req_amount)
-        preimage_list = get_preimage_list_p2wpkh(utxo_list, keymap_list)
+        preimage_list = get_preimage_list_p2wpkh(utxo_list)
         address_privkey_map = dict(iter([(keymap['address'], keymap['privkey']) for keymap in keymap_list]))
         address_pubkey_map = dict(iter([(keymap['address'], keymap['pubkey']) for keymap in keymap_list]))
         witness_b = b''
@@ -652,7 +741,7 @@ def prepare_signed_txn_p2sh_p2wpkh():
         print('IIIIIIIIIIIIII address_script_map = %s' % address_script_map)
         txn_inputs = prepare_txn_inputs_p2sh_p2wpkh(utxo_list, address_script_map)
         txn_outs = prepare_txn_outs(utxo_list, req_amount)
-        preimage_list = get_preimage_list_p2sh_p2wpkh(utxo_list, keymap_list, address_script_map)
+        preimage_list = get_preimage_list_p2sh_p2wpkh(utxo_list, address_script_map)
         address_privkey_map = dict(iter([(keymap['address'], keymap['privkey']) for keymap in keymap_list]))
         address_pubkey_map = dict(iter([(keymap['address'], keymap['pubkey']) for keymap in keymap_list]))
         witness_b = b''
@@ -683,7 +772,7 @@ def prepare_signed_txn_p2pkh():
         utxo_list = get_utxos_for_address_p2pkh(address_list, req_amount)
         address_privkey_map = dict(iter([(keymap['address'], keymap['privkey']) for keymap in keymap_list]))
         address_pubkey_map = dict(iter([(keymap['address'], keymap['pubkey']) for keymap in keymap_list]))
-        preimage_list = get_preimage_list_p2pkh(utxo_list, keymap_list)
+        preimage_list = get_preimage_list_p2pkh(utxo_list)
         txn_inputs = prepare_txn_inputs_p2pkh(utxo_list, preimage_list, address_privkey_map, address_pubkey_map)
         txn_outs = prepare_txn_outs(utxo_list, req_amount)
         locktime_b = locktime2bytes(g_locktime)
@@ -693,7 +782,44 @@ def prepare_signed_txn_p2pkh():
         signed_txn = version + txn_inputs + txn_outs + locktime_b
         return signed_txn
 
-def prepare_signed_txn_p2sh():
+def prepare_signed_txn_p2wsh():
+        global g_locktime
+        req_amount = get_required_amount()
+        version = binascii.unhexlify('%08x' % 0x02)[::-1]
+        marker = b'\x00'
+        segwit_flag = b'\x01'
+        keymaplist_list = get_funding_address_keys_p2wsh()
+        address_list  = [get_p2wsh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']) for keymaplist in keymaplist_list]
+        print('address_list = %s' % address_list)
+        utxo_list = get_utxos_for_address_p2wsh(address_list, req_amount)
+        txn_inputs = prepare_txn_inputs_bare_witness(utxo_list)
+        txn_outs = prepare_txn_outs(utxo_list, req_amount)
+        address_pubkeys_map  = dict(iter([(get_p2wsh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), [keymap['pubkey'] for keymap in keymaplist['Keymap List']]) for keymaplist in keymaplist_list]))
+        address_privkeys_map  = dict(iter([(get_p2wsh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), [keymap['privkey'] for keymap in keymaplist['Keymap List'][0: keymaplist['Unlock Key Threshold']]]) for keymaplist in keymaplist_list]))
+        print('CCCCCCCCCCCC address_privkeys_map = %s' % address_privkeys_map)
+        address_unlock_key_threshold_map  = dict(iter([(get_p2wsh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), keymaplist['Unlock Key Threshold']) for keymaplist in keymaplist_list]))
+        preimage_list = get_preimage_list_p2wsh(utxo_list, address_pubkeys_map, address_unlock_key_threshold_map)
+        witness_b = b''
+        for preimage, utxo in zip(preimage_list, utxo_list):
+                print('utxo = %s' % utxo)
+                witness_b += bytes([1 + address_unlock_key_threshold_map[utxo['address']] + 1])
+                witness_b += b'\x00'
+                for privkey_b in address_privkeys_map[utxo['address']]:
+                        sig_b = sign_txn_input(preimage, privkey_b)
+                        witness_b += bytes([len(sig_b)])
+                        witness_b += sig_b
+                redeem_script_b = get_redeem_script_from_pubkey_list(address_pubkeys_map[utxo['address']], address_unlock_key_threshold_map[utxo['address']])
+                witness_b += bytes([len(redeem_script_b)])
+                #witness_b += script_utils.encode_pushdata(len(redeem_script_b))
+                witness_b += redeem_script_b
+                print('address = %s, signature = %s, preimage = %s' % (utxo['address'], bytes.decode(binascii.hexlify(sig_b)), bytes.decode(binascii.hexlify(preimage))))
+        locktime_b = locktime2bytes(g_locktime)
+        print('locktime_b = %s' % bytes.decode(binascii.hexlify(locktime_b)))
+        print('preimage_list = %s' % [bytes.decode(binascii.hexlify(preimage)) for preimage in preimage_list])
+        signed_txn = version + marker + segwit_flag + txn_inputs + txn_outs + witness_b + locktime_b
+        return signed_txn
+
+def prepare_signed_txn_p2sh_multisig():
         global g_locktime
         req_amount = get_required_amount()
         version = binascii.unhexlify('%08x' % 0x02)[::-1]
@@ -704,8 +830,6 @@ def prepare_signed_txn_p2sh():
         address_list  = [get_p2sh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']) for keymaplist in keymaplist_list]
         print('address_list = %s' % address_list)
         utxo_list = get_utxos_for_address_p2sh(address_list, req_amount)
-        #privkey_list_list = [[keymap['privkey'] for keymap in keymaplist['Keymap List']] for keymaplist in keymaplist_list]
-        #pubkey_list_list = [[keymap['pubkey'] for keymap in keymaplist['Keymap List']] for keymaplist in keymaplist_list]
         address_pubkeys_map  = dict(iter([(get_p2sh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), [keymap['pubkey'] for keymap in keymaplist['Keymap List']]) for keymaplist in keymaplist_list]))
         address_privkeys_map  = dict(iter([(get_p2sh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), [keymap['privkey'] for keymap in keymaplist['Keymap List']]) for keymaplist in keymaplist_list]))
         address_unlock_key_threshold_map  = dict(iter([(get_p2sh_address_from_pubkey_list([keymap['pubkey'] for keymap in keymaplist['Keymap List']], keymaplist['Unlock Key Threshold']), keymaplist['Unlock Key Threshold']) for keymaplist in keymaplist_list]))
@@ -742,7 +866,10 @@ if __name__ == '__main__':
 #        signed_txn = prepare_signed_txn_p2pkh()
 #        print('signed_txn = %s' % bytes.decode(binascii.hexlify(signed_txn)))
 
-        signed_txn = prepare_signed_txn_p2sh()
+#        signed_txn = prepare_signed_txn_p2sh()
+#        print('signed_txn = %s' % bytes.decode(binascii.hexlify(signed_txn)))
+
+        signed_txn = prepare_signed_txn_p2wsh()
         print('signed_txn = %s' % bytes.decode(binascii.hexlify(signed_txn)))
 
 #        privkey = '619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9'.zfill(64)
@@ -754,6 +881,14 @@ if __name__ == '__main__':
 
         print('amount 6 => in bytes = %s' % bytes.decode(binascii.hexlify(btc2bytes(6))))
 
+#        privkey_wif, pubkey_s1, h_s, address_s = get_p2pkh_address('m/7')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s1, h_s, address_s))
+#        privkey_wif, pubkey_s2, h_s, address_s = get_p2pkh_address('m/8')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s2, h_s, address_s))
+#        privkey_wif, pubkey_s3, h_s, address_s = get_p2pkh_address('m/9')
+#        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s3, h_s, address_s))
+#        address = get_p2wsh_address_from_pubkey_list([pubkey_s1, pubkey_s2, pubkey_s3], 2)
+#        print('P2WSH address = %s' % address)
 #        privkey_wif, pubkey_s1, h_s, address_s = get_p2pkh_address('m/7')
 #        print('privkey_wif = %s, pubkey_s = %s, h_s = %s, address_s = %s' % (privkey_wif, pubkey_s1, h_s, address_s))
 #        privkey_wif, pubkey_s2, h_s, address_s = get_p2pkh_address('m/8')

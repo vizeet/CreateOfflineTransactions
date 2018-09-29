@@ -5,6 +5,7 @@ from utility_adapters import bitcoin_base58
 from utils import base58
 from utility_adapters import hash_utils
 from utils import bech32
+import hashlib
 
 network_type = ['mainnet', 'testnet', 'regtest']
 segwit_address_prefix = {'mainnet': 'bc', 'testnet': 'tb', 'regtest': 'bcrt'}
@@ -65,6 +66,7 @@ def redeemScript2address(script: bytes, nettype: str):
 def hash2segwitaddr(witprog: bytes, nettype: str):
         witver = 0x00
         hrp = segwit_address_prefix[nettype]
+        print('hrp = %s' % hrp)
         address = witnessProgram2address(hrp, witver, witprog)
         return address
 
@@ -183,3 +185,15 @@ if __name__ == '__main__':
         privkey_hex = '619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9'
         privkey_wif = privkeyHex2Wif(int(privkey_hex, 16), True, True)
         print('private key in WIF format = %s and in hex = %s' % (privkey_wif, privkey_hex))
+        print('iAAAAAAAAAA witness_prog = %s' % bytes.decode(binascii.hexlify(hash_utils.hash256(binascii.unhexlify('5202abf78175e80f509269ec5a0359fd43db2ef08bf67a828b7b167f6ceb2efd58c2026b08fbcded824e24cd10e2f688b7989e504c03b9f7a0689f3cea777074979ef402716cfe550eba81a3559573f351b4278d3f0cf1dd019be7047bae0f391e20487c53ae')))))
+        address = hash2segwitaddr(hash_utils.hash256(binascii.unhexlify('5202abf78175e80f509269ec5a0359fd43db2ef08bf67a828b7b167f6ceb2efd58c2026b08fbcded824e24cd10e2f688b7989e504c03b9f7a0689f3cea777074979ef402716cfe550eba81a3559573f351b4278d3f0cf1dd019be7047bae0f391e20487c53ae')), nettype="testnet")
+        print('P2SH address = %s' % address)
+        print('witness prog = %s' % bytes.decode(binascii.hexlify(hash_utils.hash256(binascii.unhexlify('0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798ac')))))
+        address = hash2segwitaddr(hash_utils.hash256(binascii.unhexlify('0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798ac')), nettype="mainnet")
+        print('P2SH address = %s' % address)
+        address = hash2segwitaddr(hash_utils.hash160(binascii.unhexlify('0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798')), nettype="mainnet")
+        print('P2PKH address = %s' % address)
+        address = hash2segwitaddr(binascii.unhexlify('701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d'), nettype="mainnet")
+        print('P2WSH address = %s' % address)
+        print('Sha256 = %s' % bytes.decode(binascii.hexlify(hashlib.sha256(binascii.unhexlify('52210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae')).digest())))
+        print('Sha256 = %s' % bytes.decode(binascii.hexlify(hashlib.sha256(binascii.unhexlify('522102980c5de4741f5982f7f453eb730455b8242b209cfd50554906eeba174cbfea9e2102648c69b574c34f1e75709e7cc8edf6ffb9ea24da55a00912baf062893392022721028cae016387a7a560e960b6903dc6b79b17a2fc5731e75482f1b52c88b38cbbf853ae')).digest())))
